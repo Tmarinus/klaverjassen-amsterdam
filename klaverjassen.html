@@ -136,7 +136,7 @@
   .tbtn.on{background:var(--gold);color:var(--goldink);border-color:var(--gold)}
   /* view menu (gear popover) */
   .gearwrap{position:relative}
-  .pop{position:absolute;top:calc(100% + 7px);left:0;z-index:60;width:186px;background:var(--pop);
+  .pop{position:absolute;top:calc(100% + 7px);right:0;left:auto;z-index:60;width:186px;max-width:calc(100vw - 16px);background:var(--pop);
      border:1px solid var(--panelbd);border-radius:12px;box-shadow:0 14px 30px #0009;padding:8px;display:none}
   .pop.open{display:block}
   .pop-hd{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700;padding:4px 6px 8px}
@@ -202,6 +202,16 @@
   table.vt{border-collapse:collapse;font-size:12px;margin:4px 0}
   table.vt td{border:1px solid var(--panelbd);padding:2px 7px;text-align:center}
   @media(max-width:900px){#side{display:none}}
+  /* phones: compact 2-row topbar + on-screen popover anchored to the whole bar */
+  @media(max-width:600px){
+    #topbar{position:relative;gap:7px 9px;padding:7px 10px}
+    #topbar .pill{padding:3px 8px;font-size:12px}
+    #topbar .score{gap:5px;font-size:12.5px}
+    #topbar .tm{display:none}
+    #trumpBadge{margin-left:0;font-size:13px}
+    .gearwrap{position:static}
+    .pop{top:calc(100% + 6px);right:8px;width:min(240px,calc(100vw - 16px))}
+  }
 </style>
 <script>(function(){try{var t=localStorage.getItem('kj_theme');if(t==='b'||t==='c')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 </head>
@@ -210,8 +220,8 @@
   <div id="tablewrap">
     <div id="topbar">
       <div class="score"><span class="pill">Deal <b id="dealNo">1</b>/16</span></div>
-      <div class="score"><span class="we">We (You + North)</span><span class="pill we" id="scoreWe">0</span></div>
-      <div class="score"><span class="they">They (West + East)</span><span class="pill they" id="scoreThey">0</span></div>
+      <div class="score"><span class="we">We <span class="tm">(You + North)</span></span><span class="pill we" id="scoreWe">0</span></div>
+      <div class="score"><span class="they">They <span class="tm">(West + East)</span></span><span class="pill they" id="scoreThey">0</span></div>
       <div class="gearwrap">
         <button id="viewBtn" class="tbtn" aria-expanded="false" aria-haspopup="true">⚙ View</button>
         <div id="viewPop" class="pop" role="menu">

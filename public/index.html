@@ -45,7 +45,7 @@
   .tbtn{background:var(--btn);color:var(--txt);border:1px solid var(--panelbd);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
   .tbtn:hover{background:var(--btnhov)}.tbtn.on{background:var(--gold);color:var(--goldink);border-color:var(--gold)}
   .gearwrap{position:relative}
-  .pop{position:absolute;top:calc(100% + 7px);left:0;z-index:60;width:186px;background:var(--pop);border:1px solid var(--panelbd);border-radius:12px;box-shadow:0 14px 30px #0009;padding:8px;display:none}
+  .pop{position:absolute;top:calc(100% + 7px);right:0;left:auto;z-index:60;width:186px;max-width:calc(100vw - 16px);background:var(--pop);border:1px solid var(--panelbd);border-radius:12px;box-shadow:0 14px 30px #0009;padding:8px;display:none}
   .pop.open{display:block}
   .pop-hd{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700;padding:4px 6px 8px}
   .pop-row{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;color:var(--txt);font-size:12.5px;font-weight:600}
@@ -181,6 +181,16 @@
   #ruleText h3{color:var(--gold);margin:12px 0 4px;font-size:14px}
   table.vt{border-collapse:collapse;font-size:12px;margin:4px 0}table.vt td{border:1px solid var(--panelbd);padding:2px 7px;text-align:center}
   @media(max-width:900px){#side{display:none}#cheat{width:210px}}
+  /* phones: compact 2-row topbar + on-screen popover anchored to the whole bar */
+  @media(max-width:600px){
+    #topbar{position:relative;gap:7px 9px;padding:7px 10px}
+    #topbar .pill{padding:3px 8px;font-size:12px}
+    #topbar .score{gap:5px;font-size:12.5px}
+    #topbar .tm{display:none}
+    #trumpBadge{margin-left:0;font-size:13px}
+    .gearwrap{position:static}
+    .pop{top:calc(100% + 6px);right:8px;width:min(240px,calc(100vw - 16px))}
+  }
 </style>
 <script>(function(){try{var t=localStorage.getItem('kj_theme');if(t==='b'||t==='c')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 </head>
@@ -320,8 +330,8 @@ function render(){
   if(!st){ return; }
   document.getElementById('roomPill').textContent='Table '+st.code;
   const myTeam=(st.mySeat<0?0:st.mySeat)%2;
-  document.getElementById('weLbl').textContent='We ('+TEAM_LBL[myTeam]+')';
-  document.getElementById('theyLbl').textContent='They ('+TEAM_LBL[1-myTeam]+')';
+  document.getElementById('weLbl').innerHTML='We <span class="tm">('+TEAM_LBL[myTeam]+')</span>';
+  document.getElementById('theyLbl').innerHTML='They <span class="tm">('+TEAM_LBL[1-myTeam]+')</span>';
   const cum=st.cumulative||[0,0];
   document.getElementById('scoreWe').textContent=cum[myTeam];
   document.getElementById('scoreThey').textContent=cum[1-myTeam];
