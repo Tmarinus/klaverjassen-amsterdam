@@ -5,25 +5,58 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Klaverjassen — Rotterdam Rules</title>
 <style>
-  :root{
-    --felt:#0b6b3a; --felt2:#0a5730; --gold:#e8c766; --ink:#12241a;
+  :root{   /* Theme A · Grand Casino (default) */
+    --felt:#0b6b3a; --felt2:#0a5730; --felt3:#063d22; --gold:#e8c766; --ink:#12241a;
     --card:#fbfbf5; --red:#c62828; --black:#1c1c1c;
     --panel:#0e2a1d; --panelbd:#1c4a34; --txt:#eaf3ec; --dim:#9ab6a6;
     --we:#5db3ff; --they:#ff9d6b;
+    --body:#06301c; --btn:#0a3d27; --btnhov:#0e4c31; --goldink:#241f08;
+    --pop:#07281bf5; --pophov:#0e4c3155; --ltbg:#04180e; --logbg:#0a3d2755;
+    --backbd:#ffffff55;
+    --roembg:#3a300f88; --dealbg:#0a2c4655; --natbg:#4a1414aa;
+    --cardbk:repeating-linear-gradient(45deg,#123f8a,#123f8a 5px,#1b53b0 5px,#1b53b0 10px);
   }
+  /* Theme B · Bruine Kroeg (Dutch brown café) */
+  :root[data-theme="b"]{
+    --felt:#6b4a2b; --felt2:#5a3d24; --felt3:#3f2b18; --gold:#c99a3c;
+    --card:#f3e9d2; --red:#a3241d; --black:#2a1e14;
+    --panel:#2b2018; --panelbd:#4a3720; --txt:#f4e8cf; --dim:#bb9d78;
+    --we:#7fb0e0; --they:#e0a06b;
+    --body:#3a2817; --btn:#4a3720; --btnhov:#5c4527; --goldink:#26200c;
+    --pop:#2b2018f7; --pophov:#5c452766; --ltbg:#241a12; --logbg:#4a372055;
+    --backbd:#c99a3c66;
+    --roembg:#4a3a1288; --dealbg:#26384e66; --natbg:#4a201aaa;
+    --cardbk:repeating-linear-gradient(45deg,#7a2620,#7a2620 5px,#8f2d24 5px,#8f2d24 10px);
+  }
+  :root[data-theme="b"] #table{background:
+    repeating-linear-gradient(91deg,#5a3d24 0,#5a3d24 5px,#573a22 5px,#573a22 11px),
+    linear-gradient(180deg,#6b4a2b,#4a3018)}
+  /* Theme C · Dark Mode (charcoal + gold) */
+  :root[data-theme="c"]{
+    --felt:#1a1c22; --felt2:#141519; --felt3:#0f0e0c; --gold:#e7c877;
+    --card:#1d2431; --red:#ff6b6b; --black:#e6edf3;
+    --panel:#12161c; --panelbd:#29323f; --txt:#e6edf3; --dim:#8b949e;
+    --we:#6cb2ff; --they:#ffab7a;
+    --body:#0e0f12; --btn:#1b212b; --btnhov:#242c38; --goldink:#26200c;
+    --pop:#161b22f7; --pophov:#242c3866; --ltbg:#12161c; --logbg:#1b212b66;
+    --backbd:#e7c87766;
+    --roembg:#3a320f88; --dealbg:#16324e66; --natbg:#4a1a1aaa;
+    --cardbk:repeating-linear-gradient(45deg,#26221a,#26221a 5px,#332c1f 5px,#332c1f 10px);
+  }
+  :root[data-theme="c"] #table{background:radial-gradient(120% 95% at 50% 0%,#26262a 0%,#0f0e0c 60%)}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,Arial,sans-serif;background:#06301c;color:var(--txt)}
+  html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,Arial,sans-serif;background:var(--body);color:var(--txt)}
   #app{display:flex;height:100%;min-height:100vh}
   /* ---- table ---- */
   #tablewrap{flex:1;position:relative;min-width:0;display:flex;flex-direction:column}
   #topbar{display:flex;gap:14px;align-items:center;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--panelbd);flex-wrap:wrap}
   .score{display:flex;align-items:center;gap:8px;font-weight:600}
-  .pill{padding:3px 10px;border-radius:999px;font-size:13px;background:#0a3d27;border:1px solid var(--panelbd)}
+  .pill{padding:3px 10px;border-radius:999px;font-size:13px;background:var(--btn);border:1px solid var(--panelbd)}
   .we{color:var(--we)} .they{color:var(--they)}
   #trumpBadge{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:15px}
   #trumpSym{font-size:26px;line-height:1}
   #table{flex:1;position:relative;background:
-      radial-gradient(ellipse at center, var(--felt) 0%, var(--felt2) 70%, #063d22 100%);
+      radial-gradient(ellipse at center, var(--felt) 0%, var(--felt2) 70%, var(--felt3) 100%);
       overflow:hidden;min-height:440px}
   .seat{position:absolute;display:flex;flex-direction:column;align-items:center;gap:6px;transition:filter .2s}
   .seat .name{font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:#0009;border:1px solid #ffffff22}
@@ -37,9 +70,8 @@
   /* hands of bots: fanned backs */
   .backrow{display:flex}
   .backrow.vert{flex-direction:column}
-  .cardback{width:34px;height:48px;border-radius:5px;background:
-     repeating-linear-gradient(45deg,#123f8a,#123f8a 5px,#1b53b0 5px,#1b53b0 10px);
-     border:1px solid #ffffff55;margin-left:-20px;box-shadow:0 1px 3px #0006}
+  .cardback{width:34px;height:48px;border-radius:5px;background:var(--cardbk);
+     border:1px solid var(--backbd);margin-left:-20px;box-shadow:0 1px 3px #0006}
   .backrow.vert .cardback{margin-left:0;margin-top:-34px}
   .backrow .cardback:first-child,.backrow.vert .cardback:first-child{margin:0}
   /* trick area */
@@ -51,10 +83,10 @@
   .tc-3{right:0;top:50%;transform:translateY(-50%)}
   /* last-trick recap (bottom-right) — mini mirror of the trick, same seat orientation */
   #lasttrick{position:absolute;right:12px;bottom:12px;width:124px;height:108px;z-index:15;
-     background:#04180ee0;border:1px solid var(--panelbd);border-radius:10px;box-shadow:0 4px 14px #0006}
+     background:var(--ltbg);border:1px solid var(--panelbd);border-radius:10px;box-shadow:0 4px 14px #0006}
   #lasttrick.empty{display:none}
   #lasttrick .ltlbl{position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:9px;letter-spacing:.5px;
-     color:var(--dim);background:#04180e;padding:0 6px;white-space:nowrap;text-transform:uppercase}
+     color:var(--dim);background:var(--ltbg);padding:0 6px;white-space:nowrap;text-transform:uppercase}
   .ltcard{position:absolute;width:30px;height:42px;border-radius:4px;background:var(--card);color:var(--black);
      border:1px solid #0003;box-shadow:0 1px 3px #0005;display:flex;align-items:center;justify-content:center;
      font-weight:800;font-size:13px;user-select:none}
@@ -87,23 +119,48 @@
   #side h1{font-size:16px;margin:0;padding:12px 14px;border-bottom:1px solid var(--panelbd);letter-spacing:.3px}
   #side h1 small{display:block;font-size:11px;color:var(--dim);font-weight:400;letter-spacing:0}
   #log{flex:1;overflow:auto;padding:10px 12px;font-size:12.5px;line-height:1.5}
-  #log .entry{padding:5px 8px;border-radius:6px;margin-bottom:5px;background:#0a3d2755;border-left:3px solid var(--panelbd)}
-  #log .entry.roem{border-left-color:var(--gold);background:#3a300f88}
-  #log .entry.deal{border-left-color:var(--we);background:#0a2c4655}
-  #log .entry.nat{border-left-color:var(--red);background:#4a1414aa}
+  #log .entry{padding:5px 8px;border-radius:6px;margin-bottom:5px;background:var(--logbg);border-left:3px solid var(--panelbd)}
+  #log .entry.roem{border-left-color:var(--gold);background:var(--roembg)}
+  #log .entry.deal{border-left-color:var(--we);background:var(--dealbg)}
+  #log .entry.nat{border-left-color:var(--red);background:var(--natbg)}
   #log .entry b{color:var(--gold)}
-  #rulesbtn{margin:0;border:0;border-top:1px solid var(--panelbd);background:#0a3d27;color:var(--txt);padding:9px;cursor:pointer;font-size:12px}
-  #rulesbtn:hover{background:#0e4c31}
+  #rulesbtn{margin:0;border:0;border-top:1px solid var(--panelbd);background:var(--btn);color:var(--txt);padding:9px;cursor:pointer;font-size:12px}
+  #rulesbtn:hover{background:var(--btnhov)}
   /* toast */
-  #toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--gold);color:#241f08;
+  #toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--gold);color:var(--goldink);
      font-weight:800;padding:8px 18px;border-radius:999px;box-shadow:0 4px 16px #0008;opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;z-index:20;font-size:14px}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(4px)}
   /* top-bar button */
-  .tbtn{background:#0a3d27;color:var(--txt);border:1px solid var(--panelbd);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
-  .tbtn:hover{background:#0e4c31}
-  .tbtn.on{background:var(--gold);color:#241f08;border-color:var(--gold)}
+  .tbtn{background:var(--btn);color:var(--txt);border:1px solid var(--panelbd);border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .tbtn:hover{background:var(--btnhov)}
+  .tbtn.on{background:var(--gold);color:var(--goldink);border-color:var(--gold)}
+  /* view menu (gear popover) */
+  .gearwrap{position:relative}
+  .pop{position:absolute;top:calc(100% + 7px);left:0;z-index:60;width:186px;background:var(--pop);
+     border:1px solid var(--panelbd);border-radius:12px;box-shadow:0 14px 30px #0009;padding:8px;display:none}
+  .pop.open{display:block}
+  .pop-hd{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700;padding:4px 6px 8px}
+  .pop-row{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;color:var(--txt);font-size:12.5px;font-weight:600}
+  .pop-row:hover{background:var(--pophov)}
+  .pop-row .pi{width:16px;text-align:center;opacity:.85}
+  .switch{margin-left:auto;position:relative;width:38px;height:21px;flex:none;padding:0;background:var(--btn);
+     border:1px solid var(--panelbd);border-radius:999px;cursor:pointer;transition:background .18s,border-color .18s}
+  .switch::after{content:"";position:absolute;top:50%;left:3px;width:15px;height:15px;border-radius:50%;
+     background:var(--dim);transform:translateY(-50%);transition:transform .18s,background .18s}
+  .switch[aria-checked="true"]{background:var(--gold);border-color:var(--gold)}
+  .switch[aria-checked="true"]::after{transform:translate(17px,-50%);background:var(--goldink)}
+  .switch:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .pop-sep{height:1px;background:var(--panelbd);margin:6px 4px}
+  .theme-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 6px;border:0;
+     background:none;color:var(--txt);font:600 12.5px/1 inherit;border-radius:8px;cursor:pointer;font-family:inherit}
+  .theme-opt:hover{background:var(--pophov)}
+  .theme-opt .sw{width:16px;height:16px;border-radius:5px;flex:none;border:1px solid #0004;box-shadow:inset 0 0 0 1px #ffffff22}
+  .theme-opt .chk{margin-left:auto;color:var(--gold);opacity:0;font-weight:800}
+  .theme-opt[aria-checked="true"]{background:var(--pophov)}
+  .theme-opt[aria-checked="true"] .chk{opacity:1}
+  .theme-opt:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
   /* cheat sheet panel */
-  #cheat{position:absolute;left:10px;bottom:10px;z-index:35;width:250px;background:#07281bf2;border:1px solid var(--panelbd);
+  #cheat{position:absolute;left:10px;bottom:10px;z-index:35;width:250px;background:var(--pop);border:1px solid var(--panelbd);
      border-radius:10px;padding:9px 11px 10px;box-shadow:0 6px 20px #0007;font-size:12px}
   #cheat.hidden{display:none}
   .cheat-hd{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:12.5px;color:var(--gold);margin-bottom:7px;letter-spacing:.3px}
@@ -132,20 +189,21 @@
      display:flex;align-items:center;justify-content:center;transition:transform .1s, border-color .1s;box-shadow:0 3px 8px #0006}
   .suitbtn:hover{transform:translateY(-6px);border-color:var(--gold)}
   .suitbtn.red{color:var(--red)} .suitbtn.black{color:var(--black)}
-  .btn{background:var(--gold);color:#241f08;border:0;border-radius:8px;padding:11px 26px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 3px 8px #0006}
+  .btn{background:var(--gold);color:var(--goldink);border:0;border-radius:8px;padding:11px 26px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 3px 8px #0006}
   .btn:hover{filter:brightness(1.06)}
-  .btn.sec{background:#0a3d27;color:var(--txt);border:1px solid var(--panelbd);font-weight:600}
-  .summary{text-align:left;font-size:13.5px;line-height:1.7;background:#0a3d2766;border-radius:10px;padding:12px 16px;margin:8px 0 18px}
+  .btn.sec{background:var(--btn);color:var(--txt);border:1px solid var(--panelbd);font-weight:600}
+  .summary{text-align:left;font-size:13.5px;line-height:1.7;background:var(--logbg);border-radius:10px;padding:12px 16px;margin:8px 0 18px}
   .summary .row{display:flex;justify-content:space-between}
   .summary .big{font-size:16px;font-weight:800}
   .win{color:#7ee0a0}.lose{color:#ff8a8a}
   #ruleText{text-align:left;font-size:13px;line-height:1.6;max-height:70vh;overflow:auto}
   #ruleText h3{color:var(--gold);margin:14px 0 4px;font-size:14px}
-  #ruleText code{background:#0a3d27;padding:1px 5px;border-radius:4px}
+  #ruleText code{background:var(--btn);padding:1px 5px;border-radius:4px}
   table.vt{border-collapse:collapse;font-size:12px;margin:4px 0}
   table.vt td{border:1px solid var(--panelbd);padding:2px 7px;text-align:center}
   @media(max-width:900px){#side{display:none}}
 </style>
+<script>(function(){try{var t=localStorage.getItem('kj_theme');if(t==='b'||t==='c')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 </head>
 <body>
 <div id="app">
@@ -154,8 +212,20 @@
       <div class="score"><span class="pill">Deal <b id="dealNo">1</b>/16</span></div>
       <div class="score"><span class="we">We (You + North)</span><span class="pill we" id="scoreWe">0</span></div>
       <div class="score"><span class="they">They (West + East)</span><span class="pill they" id="scoreThey">0</span></div>
-      <button id="cheatBtn" class="tbtn on">🃏 Cheat sheet</button>
-      <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--dim);font-weight:600">🤖<select id="diffSel" style="background:#0a3d27;color:var(--txt);border:1px solid var(--panelbd);border-radius:7px;padding:4px 8px;font-size:12.5px;font-weight:700;cursor:pointer"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option><option value="family">Family</option></select></label>
+      <div class="gearwrap">
+        <button id="viewBtn" class="tbtn" aria-expanded="false" aria-haspopup="true">⚙ View</button>
+        <div id="viewPop" class="pop" role="menu">
+          <div class="pop-hd">View</div>
+          <div class="pop-row"><span class="pi">🕓</span>Last trick<button class="switch" id="lastTrickSw" role="switch" aria-checked="true" aria-label="Last-trick recap"></button></div>
+          <div class="pop-row"><span class="pi">🃏</span>Cheat sheet<button class="switch" id="cheatSw" role="switch" aria-checked="true" aria-label="Card cheat sheet"></button></div>
+          <div class="pop-sep"></div>
+          <div class="pop-hd">Theme</div>
+          <button class="theme-opt" data-theme="a" role="menuitemradio" aria-checked="true"><span class="sw" style="background:linear-gradient(135deg,#0b6b3a,#e8c766)"></span>Grand Casino<span class="chk">✓</span></button>
+          <button class="theme-opt" data-theme="b" role="menuitemradio" aria-checked="false"><span class="sw" style="background:linear-gradient(135deg,#6b4a2b,#f3e9d2)"></span>Bruine Kroeg<span class="chk">✓</span></button>
+          <button class="theme-opt" data-theme="c" role="menuitemradio" aria-checked="false"><span class="sw" style="background:linear-gradient(135deg,#12161c,#e7c877)"></span>Dark Mode<span class="chk">✓</span></button>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--dim);font-weight:600">🤖<select id="diffSel" style="background:var(--btn);color:var(--txt);border:1px solid var(--panelbd);border-radius:7px;padding:4px 8px;font-size:12.5px;font-weight:700;cursor:pointer"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option><option value="family">Family</option></select></label>
       <div id="trumpBadge"><span class="teamtag">TRUMP</span><span id="trumpSym">–</span><span id="trumpBy" class="teamtag"></span></div>
     </div>
     <div id="table">
@@ -424,6 +494,8 @@ function scoreDeal(){
    (family = Perfect-Information Monte Carlo; strictly stronger than hard)
    ============================================================ */
 let botLevel = localStorage.getItem('kj_botlevel') || 'normal';
+let showLastTrick = localStorage.getItem('kj_lasttrick') !== '0';   // last-trick recap visible by default
+let showCheat = localStorage.getItem('kj_cheat') !== '0';           // cheat sheet visible by default
 const ALL_CARDS=[]; for(const s of SUITS) for(const r of RANKS) ALL_CARDS.push({suit:s,rank:r});
 const cid=c=>c.suit+c.rank;
 const vLow =(a,tr)=>a.reduce((x,y)=>cardVal(x,tr)<=cardVal(y,tr)?x:y);
@@ -683,7 +755,7 @@ function render(){
   }
   // last-trick recap (bottom-right): same seat orientation as the middle
   const ltEl=document.getElementById('lasttrick'); ltEl.innerHTML='';
-  if(state.lastTrick&&state.lastTrick.length){
+  if(showLastTrick&&state.lastTrick&&state.lastTrick.length){
     ltEl.classList.remove('empty');
     const lbl=document.createElement('div'); lbl.className='ltlbl'; lbl.textContent='Last trick'; ltEl.appendChild(lbl);
     for(const t of state.lastTrick) ltEl.appendChild(miniCardEl(t.card,t.seat,t.seat===state.lastTrickWinner));
@@ -711,15 +783,34 @@ function renderCheat(){
   buildTiles(document.getElementById('cheatTrump'),CHEAT_TRUMP,TRUMP_VAL,tr);
   buildTiles(document.getElementById('cheatPlain'),CHEAT_PLAIN,PLAIN_VAL,null);
 }
-document.getElementById('cheatBtn').addEventListener('click',()=>{
-  const c=document.getElementById('cheat');
-  const hidden=c.classList.toggle('hidden');
-  document.getElementById('cheatBtn').classList.toggle('on',!hidden);
-});
-document.getElementById('cheatClose').addEventListener('click',()=>{
-  document.getElementById('cheat').classList.add('hidden');
-  document.getElementById('cheatBtn').classList.remove('on');
-});
+/* ---------- view menu (gear popover): cheat sheet + last-trick toggles ---------- */
+const viewBtn=document.getElementById('viewBtn'), viewPop=document.getElementById('viewPop');
+const cheatSw=document.getElementById('cheatSw'), lastTrickSw=document.getElementById('lastTrickSw');
+function openView(open){ viewPop.classList.toggle('open',open); viewBtn.setAttribute('aria-expanded',open); viewBtn.classList.toggle('on',open); }
+viewBtn.addEventListener('click',e=>{ e.stopPropagation(); openView(!viewPop.classList.contains('open')); });
+document.addEventListener('click',e=>{ if(!viewPop.contains(e.target)&&e.target!==viewBtn) openView(false); });
+function setCheat(on,persist=true){ showCheat=on; if(persist) localStorage.setItem('kj_cheat',on?'1':'0'); document.getElementById('cheat').classList.toggle('hidden',!on); cheatSw.setAttribute('aria-checked',on); }
+function setLastTrick(on){ showLastTrick=on; localStorage.setItem('kj_lasttrick',on?'1':'0'); lastTrickSw.setAttribute('aria-checked',on); if(state) render(); }
+cheatSw.addEventListener('click',e=>{ e.stopPropagation(); setCheat(cheatSw.getAttribute('aria-checked')!=='true'); });
+lastTrickSw.addEventListener('click',e=>{ e.stopPropagation(); const on=lastTrickSw.getAttribute('aria-checked')!=='true'; setLastTrick(on); toast(on?'Last trick shown':'Last trick hidden'); });
+[cheatSw,lastTrickSw].forEach(s=>s.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); s.click(); } }));
+lastTrickSw.setAttribute('aria-checked',showLastTrick);   // reflect persisted state
+setCheat(showCheat);                                      // reflect persisted state
+document.getElementById('cheatClose').addEventListener('click',()=>setCheat(false));
+/* ---------- theme picker (Grand Casino / Bruine Kroeg / Dark Mode) ---------- */
+const THEME_NAME={a:'Grand Casino',b:'Bruine Kroeg',c:'Dark Mode'};
+let theme=localStorage.getItem('kj_theme')||'a';
+if(!THEME_NAME[theme]) theme='a';   // fall back if an unknown/legacy id was stored
+function applyTheme(t,announce){
+  theme=t;
+  if(t==='a') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('kj_theme',t);
+  document.querySelectorAll('.theme-opt').forEach(o=>o.setAttribute('aria-checked',o.dataset.theme===t));
+  if(announce) toast('Theme: '+THEME_NAME[t]);
+}
+document.querySelectorAll('.theme-opt').forEach(o=>o.addEventListener('click',e=>{ e.stopPropagation(); applyTheme(o.dataset.theme,true); }));
+applyTheme(theme);
 
 function renderHand(passive){
   const handEl=document.getElementById('hand'); handEl.innerHTML='';
@@ -758,9 +849,8 @@ function describeObligation(legal){
 function askTrump(){
   renderHand(true);
   document.getElementById('handlabel').textContent='You choose trump this deal — pick a suit.';
-  // keep the cheat sheet visible (and above the dimmed overlay) while choosing
-  document.getElementById('cheat').classList.remove('hidden');
-  document.getElementById('cheatBtn').classList.add('on');
+  // keep the cheat sheet visible (and above the dimmed overlay) while choosing — don't overwrite the saved preference
+  setCheat(true,false);
   renderCheat();
   const ov=document.createElement('div'); ov.className='overlay'; ov.id='ovTrump';
   ov.innerHTML=`<div class="modal"><h2>Choose trump</h2>
