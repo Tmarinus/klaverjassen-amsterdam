@@ -2,8 +2,8 @@ name: Build Android APK
 
 # Builds a SIGNED release APK and publishes it as a GitHub Release so the app's
 # self-updater can pull it. Two stable, auth-free URLs come out of every run:
-#   https://github.com/Judoka0420/klaverjassen/releases/latest/download/version.json
-#   https://github.com/Judoka0420/klaverjassen/releases/latest/download/klaverjassen.apk
+#   https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest/download/version.json
+#   https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest/download/klaverjassen.apk
 #
 # Signing key comes from repo Secrets (never stored in this public repo):
 #   ANDROID_KEYSTORE_B64      base64 of the .jks keystore  (see keystore.yml to generate)

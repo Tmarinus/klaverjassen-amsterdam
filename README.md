@@ -5,7 +5,7 @@ Any empty seats are played by the AI, so a game can start with 1–4 humans.
 
 ## ▶ Play now
 
-**Web (any device, no install):** **https://judoka0420.github.io/klaverjassen/**
+**Web (any device, no install):** **https://tmarinus.github.io/klaverjassen-amsterdam/**
 
 Open it on a PC or phone browser, pick a name, then:
 - **🤖 Play solo** — offline vs bots, no network needed.
@@ -17,7 +17,7 @@ Everyone just needs internet; the host keeps their tab/app open. PC browsers, ph
 and the Android app all interoperate.
 
 **Android app:** install the APK from the repo's
-[Actions → Build Android APK](https://github.com/Judoka0420/klaverjassen/actions) → latest run →
+[Actions → Build Android APK](https://github.com/Tmarinus/klaverjassen-amsterdam/actions) → latest run →
 Artifacts. Same game, native. (iOS: the Capacitor project supports it, but building needs a Mac.)
 
 ## Repo layout

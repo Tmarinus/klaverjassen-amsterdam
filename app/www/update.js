@@ -12,7 +12,7 @@
  * always point at the newest release without hard-coding a tag.
  */
 (function () {
-  var REPO = 'https://github.com/Judoka0420/klaverjassen';
+  var REPO = 'https://github.com/Tmarinus/klaverjassen-amsterdam';
   var VERSION_URL = REPO + '/releases/latest/download/version.json';
   var APK_URL = REPO + '/releases/latest/download/klaverjassen.apk';
   var THROTTLE_MS = 5 * 60 * 1000;   // don't re-check more than once per 5 min per foreground
