@@ -45,6 +45,7 @@ class GameRoom {
     this.timers = new Set();
     this.advanced = false;
     this.botLevel = opts.botLevel || 'normal';     // easy | normal | hard | family
+    this.handRoem = !!opts.handRoem;               // host option: roem in hand may be called
     this.spectators = new Map();                   // playerId -> { name }
     this.tokens = new Map();                        // playerId -> seat reconnection token
     this.g = null;                                 // game state
@@ -114,7 +115,8 @@ class GameRoom {
     // Random starting dealer each match, so the host (seat 0) isn't always first to choose trump.
     this.g = { deal: 0, cumulative: [0, 0], firstDealer: Math.floor(Math.random() * 4) };
     this.log = [];
-    this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: <b>${this.botLevel}</b>.`);
+    this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: <b>${this.botLevel}</b>.` +
+      (this.handRoem ? ' Roem in hand: <b>on</b> (call it before your first card).' : ''));
     this.newDeal();
   }
 
@@ -132,6 +134,7 @@ class GameRoom {
       dealer, chooser, hands, trump: null,
       trick: [], leader: chooser, turn: chooser, trickNo: 0, resolving: false,
       dealCard: [0, 0], dealRoem: [0, 0], tricksWon: [0, 0], played: [],
+      roemCalled: [false, false, false, false], calledRoem: [0, 0],
       lastResult: null,
     });
     this.phase = 'choosing';
@@ -170,9 +173,26 @@ class GameRoom {
       // re-validate: state may have moved on, or a human may have reconnected to this seat
       if (this.phase !== 'playing' || this.g.turn !== seat || !this.isAuto(seat)) return;
       if (!this.g.hands[seat].length) return;
-      const card = E.chooseBotCard(seat, this.g.hands[seat], this.g.trick, this.g.trump, { level: this.botLevel, played: this.g.played, chooser: this.g.chooser });
+      if (this.canCallRoem(seat)) this.callRoem(seat);   // bots always call their hand roem
+      const card = E.chooseBotCard(seat, this.g.hands[seat], this.g.trick, this.g.trump, { level: this.botLevel, played: this.g.played, chooser: this.g.chooser, calledRoem: this.g.calledRoem });
       if (card) this.doPlay(seat, card);
     });
+  }
+
+  // Hand roem can be called once, any time after trump is set and before the
+  // holder plays their first card of the deal.
+  canCallRoem(seat) {
+    const g = this.g;
+    return this.handRoem && this.phase === 'playing' && seat >= 0 && !g.roemCalled[seat] &&
+      g.hands[seat].length === 8 && E.handRoem(g.hands[seat], g.trump).roem > 0;
+  }
+  callRoem(seat) {
+    if (!this.canCallRoem(seat)) return;
+    const g = this.g, tm = E.teamOf(seat), { roem, labels } = E.handRoem(g.hands[seat], g.trump);
+    g.roemCalled[seat] = true;
+    g.dealRoem[tm] += roem; g.calledRoem[tm] += roem;
+    this.addLog('roem', `${this.name(seat)} calls roem +${roem}: ${labels.join(', ')}.`);
+    this.broadcast();
   }
 
   // returns error string or null
@@ -284,6 +304,12 @@ class GameRoom {
           this.botLevel = data.level; this.broadcast();
         }
         break;
+      case 'setHandRoem':
+        if (this.hostId === playerId && this.phase === 'lobby') { this.handRoem = !!data.on; this.broadcast(); }
+        break;
+      case 'callRoem':
+        this.callRoem(this.seatOf(playerId));
+        break;
       case 'claimSeat':
         if (this.claimSeat(playerId, data.seat)) this.broadcast();
         break;
@@ -329,6 +355,7 @@ class GameRoom {
       log: this.log.slice(-40),
       canStart: this.phase === 'lobby',
       botLevel: this.botLevel,
+      handRoem: this.handRoem,
     };
     if (mySeat >= 0 && this.seats[mySeat]) base.token = this.tokens.get(this.seats[mySeat].playerId);
     if (!g) return base;
@@ -345,6 +372,8 @@ class GameRoom {
       hand: mine, legal,
       needTrump: this.phase === 'choosing' && mySeat === g.chooser,
       lastResult: g.lastResult,
+      myRoem: (this.handRoem && this.phase === 'playing' && mySeat >= 0)
+        ? Object.assign(E.handRoem(g.hands[mySeat], g.trump), { canCall: this.canCallRoem(mySeat) }) : null,
     });
   }
 }

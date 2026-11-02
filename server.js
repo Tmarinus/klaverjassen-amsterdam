@@ -132,6 +132,8 @@ io.on('connection', (socket) => {
   };
   socket.on('claimSeat', forward('claimSeat'));
   socket.on('setDifficulty', forward('setDifficulty'));
+  socket.on('setHandRoem', forward('setHandRoem'));
+  socket.on('callRoem', forward('callRoem'));
   socket.on('start', forward('start'));
   socket.on('chooseTrump', forward('chooseTrump'));
   socket.on('play', forward('play'));

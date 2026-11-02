@@ -109,6 +109,32 @@ function computeRoem(cards, trump) {
   return { roem, labels };
 }
 
+/* Roem held in a hand (optional "roem in hand" variant): every run of 3+ in a
+   suit (3 = 20, 4 = 50, 5+ = 100) plus stuk (trump K+Q = 20). Called before the
+   holder's first card; never overlaps trick roem, since one player's cards never
+   share a trick. */
+function handRoem(cards, trump) {
+  let roem = 0; const labels = [];
+  const SYM = { clubs: '♣', diamonds: '♦', hearts: '♥', spades: '♠' };
+  for (const s of SUITS) {
+    const idx = cards.filter(c => c.suit === s).map(c => SEQ.indexOf(c.rank)).sort((a, b) => a - b);
+    let start = 0;
+    for (let i = 1; i <= idx.length; i++) {
+      if (i < idx.length && idx[i] === idx[i - 1] + 1) continue;
+      const len = i - start;
+      if (len >= 3) {
+        const pts = len >= 5 ? 100 : len === 4 ? 50 : 20;
+        roem += pts; labels.push(`${SYM[s]} run of ${len} +${pts}`);
+      }
+      start = i;
+    }
+  }
+  if (trump && cards.some(c => c.suit === trump && c.rank === 'K') && cards.some(c => c.suit === trump && c.rank === 'Q')) {
+    roem += 20; labels.push('stuk (trump K-Q) +20');
+  }
+  return { roem, labels };
+}
+
 /* ============================================================
    Bot AI — four difficulty levels: 'easy' | 'normal' | 'hard' | 'family'
    - easy   : plays a random legal card; naive trump pick. Beatable beginner.
@@ -177,7 +203,7 @@ function chooseBotCard(seat, hand, trick, trump, opts = {}) {
   if (!legal.length) return null;                    // empty hand (stale call) — caller must guard
   const level = opts.level || 'normal';
   if (level === 'easy') return legal[Math.floor(Math.random() * legal.length)];
-  if (level === 'family') return familyPlay(seat, hand, trick, trump, legal, opts.played || [], opts.chooser, opts.samples);
+  if (level === 'family') return familyPlay(seat, hand, trick, trump, legal, opts.played || [], opts.chooser, opts.samples, opts.calledRoem);
   if (level === 'hard') return hardPlay(seat, hand, trick, trump, legal, opts.played || [], opts.chooser);
   return normalPlay(seat, trick, trump, legal);
 }
@@ -390,7 +416,8 @@ function awardDiff(acc, play, myTeam) {
   return awarded[myTeam] - awarded[1 - myTeam];
 }
 
-function familyPlay(seat, hand, trick, trump, legal, played, chooser, samples) {
+// calledRoem: [team0, team1] hand roem already called this deal (not visible in `played`).
+function familyPlay(seat, hand, trick, trump, legal, played, chooser, samples, calledRoem) {
   if (legal.length === 1) return legal[0];
   const N = samples || DEFAULT_SAMPLES;
   const rec = reconstructDeal(played, trump, chooser);
@@ -411,7 +438,7 @@ function familyPlay(seat, hand, trick, trump, legal, played, chooser, samples) {
     for (let ci = 0; ci < legal.length; ci++) {
       const H = world.map(h => h.slice());
       const T = trick.map(t => ({ seat: t.seat, card: t.card }));
-      const acc = { card: rec.card.slice(), roem: rec.roem.slice(), won: rec.won.slice(), trickNo: rec.completed };
+      const acc = { card: rec.card.slice(), roem: rec.roem.map((r, t) => r + (calledRoem ? calledRoem[t] : 0)), won: rec.won.slice(), trickNo: rec.completed };
       const c = legal[ci];
       const idx = H[seat].findIndex(x => x.suit === c.suit && x.rank === c.rank);
       H[seat].splice(idx, 1);
@@ -431,7 +458,7 @@ function familyPlay(seat, hand, trick, trump, legal, played, chooser, samples) {
 const API = {
   SUITS, RANKS, SEQ, TRUMP_VAL, PLAIN_VAL, TRUMP_STR, PLAIN_STR,
   teamOf, cardId, cardVal, freshDeck, handComparator,
-  winnerIndex, trickWinnerSeat, legalMoves, computeRoem,
+  winnerIndex, trickWinnerSeat, legalMoves, computeRoem, handRoem,
   botChooseTrump, chooseBotCard,
 };
 

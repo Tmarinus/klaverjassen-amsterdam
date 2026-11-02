@@ -50,7 +50,13 @@ Amsterdam Klaverjassen — what you must play:
 (Rotterdam rules differ: there you must always trump, even over your partner.)
 
 Declaring team must score more than the opponents (points + roem) or go *nat*. Roem: runs
-(3 = 20, 4 = 50) and *stuk* (trump K+Q = 20). 16 deals; highest cumulative total wins. Full
+(3 = 20, 4 = 50) and *stuk* (trump K+Q = 20) among the four cards of a trick, to the trick's winner.
+
+**Roem in hand** (optional, chosen by the host on the start screen or in the lobby): runs in your
+own hand (3 = 20, 4 = 50, 5+ = 100) and stuk also score for your team, but only if you **call**
+them (the *📣 Call roem* button) before you play your first card of the deal. Bots always call.
+
+16 deals; highest cumulative total wins. Full
 reference is in the in-game **Rules** panel.
 
 ## Setting up a copy of this repo

@@ -67,6 +67,7 @@ function createSolo(opts) {
   const me = opts.playerId;
   const room = new GameRoom('SOLO', {
     botLevel: opts.botLevel || 'normal',
+    handRoem: !!opts.handRoem,
     send(pid, event, payload) { if (pid === me) net._fire(event, payload); },
   });
   room.addHuman(me, opts.name || 'You');
@@ -94,6 +95,7 @@ function createHost(opts) {
 
   const room = new GameRoom(code, {
     botLevel: opts.botLevel || 'normal',
+    handRoem: !!opts.handRoem,
     send(pid, event, payload) {
       if (pid === me) { net._fire(event, payload); return; }
       const c = remotes.get(pid);

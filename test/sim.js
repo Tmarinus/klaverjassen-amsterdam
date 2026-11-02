@@ -130,6 +130,43 @@ function check(name, ok, detail) {
   check('Amsterdam obligations (hand-built positions)', bad.length === 0, bad.length ? 'wrong: ' + bad.join('; ') : `${cases.length} cases`);
 })();
 
+/* ---- roem in hand: counting + calling rules ---- */
+(function handRoemRules() {
+  const C = (suit, rank) => ({ suit, rank });
+  const bad = [];
+  const want = (name, cards, trump, pts) => { const r = E.handRoem(cards, trump).roem; if (r !== pts) bad.push(`${name} (${r}, want ${pts})`); };
+  // the 9 Q K 10 A of spades from the bug report: Q-K-A is a run of 3 (9 and 10 aren't adjacent)
+  want('Q-K-A + loose 9, 10', [C('spades', '9'), C('spades', 'Q'), C('spades', 'K'), C('spades', '10'), C('spades', 'A')], 'hearts', 20);
+  want('two runs in one suit', [C('spades', '7'), C('spades', '8'), C('spades', '9'), C('spades', 'Q'), C('spades', 'K'), C('spades', 'A')], 'hearts', 40);
+  want('run of 4', [C('clubs', '9'), C('clubs', '10'), C('clubs', 'J'), C('clubs', 'Q')], 'hearts', 50);
+  want('run of 5', [C('clubs', '9'), C('clubs', '10'), C('clubs', 'J'), C('clubs', 'Q'), C('clubs', 'K')], 'hearts', 100);
+  want('stuk + trump run', [C('hearts', 'J'), C('hearts', 'Q'), C('hearts', 'K')], 'hearts', 40);
+  want('K-Q not trump', [C('spades', 'Q'), C('spades', 'K')], 'hearts', 0);
+
+  // calling: only once, only before your first card, and only when the host enabled it
+  const R = require(path.join(__dirname, '..', 'game-room.js'));
+  const room = new R.GameRoom('T', { handRoem: true, timings: { botThink: 1e9, trumpThink: 1e9, trickLinger: 1e9, dealAuto: 1e9 } });
+  room.addHuman('me', 'Me'); room.startGame(); room.clearTimers();
+  const g = room.g, seat = 0, tm = E.teamOf(seat);
+  g.hands[seat] = [C('spades', 'Q'), C('spades', 'K'), C('spades', 'A'), C('clubs', '7'), C('clubs', '9'), C('diamonds', '7'), C('diamonds', '9'), C('hearts', '8')];
+  g.chooser = g.turn = g.leader = seat; room.phase = 'choosing'; room.setTrump('hearts'); room.clearTimers();
+  const before = g.dealRoem[tm];
+  if (!room.viewFor(seat).myRoem.canCall) bad.push('canCall false before first card');
+  room.handle('me', 'callRoem'); room.handle('me', 'callRoem');
+  if (g.dealRoem[tm] - before !== 20) bad.push(`call scored ${g.dealRoem[tm] - before}, want 20 once`);
+  const room2 = new R.GameRoom('U', { handRoem: true, timings: room.timings });
+  room2.addHuman('me', 'Me'); room2.startGame(); room2.clearTimers();
+  room2.g.hands[0] = g.hands[0].slice(); room2.g.chooser = room2.g.turn = room2.g.leader = 0;
+  room2.phase = 'choosing'; room2.setTrump('hearts'); room2.clearTimers();
+  room2.handle('me', 'play', { cardId: 'clubs7' }); room2.clearTimers();
+  room2.handle('me', 'callRoem');
+  if (room2.g.dealRoem[0] !== 0) bad.push('call accepted after first card');
+  const off = new R.GameRoom('V', { timings: room.timings });
+  off.addHuman('me', 'Me'); off.startGame(); off.clearTimers();
+  if (off.viewFor(0).handRoem) bad.push('hand roem on by default');
+  check('roem in hand (counting + calling)', bad.length === 0, bad.length ? bad.join('; ') : '6 hands, 3 call checks');
+})();
+
 /* ---- 3: strength ordering easy < normal < hard < family (match level) ---- */
 // One 16-deal match: strong = team 0, weak = team 1. Returns the cumulative points.
 function playMatch(strong, weak, timing) {

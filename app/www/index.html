@@ -121,6 +121,8 @@
   #hand .card.legal:hover{transform:translateY(-16px)}
   #hand .card.illegal{filter:brightness(.6) saturate(.6)}
   #handlabel{font-size:12px;color:var(--dim);min-height:16px;text-align:center}
+  #roemcall:empty{display:none}
+  #roemcall .btn{padding:6px 14px;font-size:13px}
   #side{width:290px;background:var(--panel);border-left:1px solid var(--panelbd);display:flex;flex-direction:column}
   #side h1{font-size:16px;margin:0;padding:12px 14px;border-bottom:1px solid var(--panelbd)}
   #side h1 small{display:block;font-size:11px;color:var(--dim);font-weight:400}
@@ -241,6 +243,7 @@
     </div>
     <div id="handbar">
       <div id="handlabel"></div>
+      <div id="roemcall"></div>
       <div id="hand"></div>
     </div>
   </div>
@@ -290,6 +293,8 @@ function trickWinnerSeat(trick,trump){
   return trick[bi].seat;
 }
 let myDiff=localStorage.getItem('kj_diff')||'normal';
+let myHandRoem=localStorage.getItem('kj_handroem')==='1';   // host option: roem in hand
+const onOffBtns=(on,dis)=>[['off','Off'],['on','On']].map(([v,l])=>`<button class="diffbtn ${(v==='on')===on?'on':''}" data-r="${v}" ${dis?'disabled':''}>${l}</button>`).join('');
 
 // Wire a freshly-created transport to the UI. Same event names the old socket used.
 function bindNet(n){
@@ -320,6 +325,7 @@ function showWelcome(){
     <div class="diffrow"><span class="difflbl">Bot difficulty</span><div class="diffbtns" id="wDiff">${
       ['easy','normal','hard','family'].map(l=>`<button class="diffbtn ${myDiff===l?'on':''}" data-l="${l}">${l[0].toUpperCase()+l.slice(1)}</button>`).join('')
     }</div></div>
+    <div class="diffrow"><span class="difflbl">Roem in hand</span><div class="diffbtns" id="wRoem">${onOffBtns(myHandRoem)}</div></div>
     <button class="btn wide" id="soloBtn">🤖 Play solo — offline</button>
     <button class="btn wide" id="hostBtn">🌐 Host a game with friends</button>
     <div class="sep">or join a friend's game</div>
@@ -332,8 +338,12 @@ function showWelcome(){
     myDiff=b.dataset.l; localStorage.setItem('kj_diff',myDiff);
     ov.querySelectorAll('#wDiff .diffbtn').forEach(x=>x.classList.toggle('on',x.dataset.l===myDiff));
   });
-  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff})); };
-  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff})); };
+  ov.querySelectorAll('#wRoem .diffbtn').forEach(b=>b.onclick=()=>{
+    myHandRoem=b.dataset.r==='on'; localStorage.setItem('kj_handroem',myHandRoem?'1':'0');
+    ov.querySelectorAll('#wRoem .diffbtn').forEach(x=>x.classList.toggle('on',(x.dataset.r==='on')===myHandRoem));
+  });
+  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem})); };
+  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem})); };
   ov.querySelector('#joinBtn').onclick=()=>{ const c=ov.querySelector('#jc').value.trim().toUpperCase(); if(c.length<4)return toast('Enter a 4-letter code',true); saveName(); teardownNet(); toast('Connecting to '+c+'…'); bindNet(KJNet.createClient({playerId,name:myName,code:c,token:seatToken})); };
   ov.querySelector('#jc').addEventListener('keydown',e=>{ if(e.key==='Enter')ov.querySelector('#joinBtn').click(); });
   nm.focus();
@@ -430,6 +440,14 @@ function renderHand(){
     handEl.appendChild(el);
   }
   label.textContent=statusLine();
+  const rc=document.getElementById('roemcall'); rc.innerHTML='';
+  const r=st.myRoem;
+  if(r&&r.canCall){
+    const b=document.createElement('button'); b.className='btn';
+    b.textContent=`📣 Call roem +${r.roem}`; b.title=r.labels.join(', ');
+    b.onclick=()=>net.emit('callRoem');
+    rc.appendChild(b);
+  }
 }
 function statusLine(){
   if(!st) return '';
@@ -497,11 +515,13 @@ function renderLobbyModal(){
     <div class="diffrow"><span class="difflbl">Bot difficulty</span><div class="diffbtns">${
       ['easy','normal','hard','family'].map(l=>`<button class="diffbtn ${st.botLevel===l?'on':''}" data-l="${l}" ${iAmHost?'':'disabled'}>${l[0].toUpperCase()+l.slice(1)}</button>`).join('')
     }</div></div>
+    <div class="diffrow"><span class="difflbl">Roem in hand</span><div class="diffbtns" id="lRoem">${onOffBtns(!!st.handRoem,!iAmHost)}</div></div>
     <p style="margin:6px 0 12px">${iAmHost?'Empty seats become bots when you start.':'Waiting for the host to start…'}</p>
     ${iAmHost?'<button class="btn wide" id="startBtn">Start match ▶</button>':''}
   `;
   ov.querySelectorAll('.lseat').forEach(el=>el.onclick=()=>{ const seat=+el.dataset.seat; if(seat!==st.mySeat) net.emit('claimSeat',{seat}); });
-  ov.querySelectorAll('.diffbtn').forEach(b=>b.onclick=()=>{ if(iAmHost) net.emit('setDifficulty',{level:b.dataset.l}); });
+  ov.querySelectorAll('.diffbtn[data-l]').forEach(b=>b.onclick=()=>{ if(iAmHost) net.emit('setDifficulty',{level:b.dataset.l}); });
+  ov.querySelectorAll('#lRoem .diffbtn').forEach(b=>b.onclick=()=>{ if(iAmHost){ myHandRoem=b.dataset.r==='on'; localStorage.setItem('kj_handroem',myHandRoem?'1':'0'); net.emit('setHandRoem',{on:myHandRoem}); } });
   ov.querySelector('#copyLink').onclick=()=>{ const code=st.code; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(()=>toast('Code '+code+' copied — share it!'),()=>toast('Share code: '+code)); } else toast('Share code: '+code); };
   const sb=ov.querySelector('#startBtn'); if(sb) sb.onclick=()=>net.emit('start');
 }
@@ -631,6 +651,7 @@ document.getElementById('rulesbtn').onclick=()=>{
     <tr><td><b>Plain</b></td><td>A 11</td><td>10 10</td><td>K 4</td><td>Q 3</td><td>J 2</td><td colspan="2">9/8/7 0</td></tr></table>
     152 + 10 last trick = <b>162</b> per deal.
     <h3>Roem</h3>run3 20 · run4 50 · <b>stuk</b> (trump K+Q) 20 · run incl. trump K-Q 40/70. To the team winning the trick.
+    <br><b>Roem in hand</b> (host option): runs in your own hand (3 = 20, 4 = 50, 5+ = 100) and stuk score for your team — but only if you <b>call</b> it before playing your first card.
     <h3>Winning</h3>The declaring team must score <b>more than</b> the opponents (points + roem), else they go <b>nat</b> and the opponents take all 162 + all roem. All 8 tricks = <b>pit</b> (+100).
     <h3>Match</h3>16 deals; highest total wins.
     </div><br><button class="btn sec" id="closeRules">Close</button></div>`);
