@@ -3,6 +3,10 @@
 Play Klaverjassen — solo against bots, or with up to 3 friends across the internet.
 Any empty seats are played by the AI, so a game can start with 1–4 humans.
 
+This is the **Amsterdam-rules** version of
+[Judoka0420/klaverjassen](https://github.com/Judoka0420/klaverjassen) (which plays Rotterdam rules).
+Only the trumping obligations differ — see [Rules](#rules).
+
 ## ▶ Play now
 
 **Web (any device, no install):** **https://tmarinus.github.io/klaverjassen-amsterdam/**
@@ -16,9 +20,11 @@ Multiplayer is **peer-to-peer** (WebRTC via the free PeerJS matchmaker) — **no
 Everyone just needs internet; the host keeps their tab/app open. PC browsers, phone browsers,
 and the Android app all interoperate.
 
-**Android app:** install the APK from the repo's
-[Actions → Build Android APK](https://github.com/Tmarinus/klaverjassen-amsterdam/actions) → latest run →
-Artifacts. Same game, native. (iOS: the Capacitor project supports it, but building needs a Mac.)
+**Android app:** download
+[klaverjassen.apk](https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest/download/klaverjassen.apk)
+from the latest [Release](https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest) and
+install it. Same game, native; it checks this repo's Releases for updates and can install them
+itself. (iOS: the Capacitor project supports it, but building needs a Mac.)
 
 ## Repo layout
 - `engine.js` — pure Amsterdam rules engine (deal, legal moves, roem, scoring, bot AI). Verified by simulation.
@@ -27,18 +33,33 @@ Artifacts. Same game, native. (iOS: the Capacitor project supports it, but build
   - `app/www/` — the site published to GitHub Pages (index.html + net.js + generated `lib/`).
 - `klaverjassen.html` — the original standalone **offline single-player** file (double-click to play).
 - `public/` + `server.js` — the legacy self-hosted server version (see below).
-- `test/sim.js` — engine self-play tests: legality, the 162-point invariant, and
-  bot-strength ordering (easy < normal < hard < family). Run with `npm test`;
-  gated in CI by `.github/workflows/test.yml`.
+- `test/sim.js` — engine tests: hand-built Amsterdam obligation positions, self-play
+  legality, the 162-point invariant, and bot-strength ordering (easy < normal < hard <
+  family). Run with `npm test`; gated in CI by `.github/workflows/test.yml`.
 
 ## Rules
-Amsterdam Klaverjassen: follow suit; if void and **your partner is winning the trick** you may
-play **any card** (but no undertrumping). Otherwise you **must trump**; with a trump already down
-you **must overtrump** if you can, and if you can't you must play a card of **another suit** —
-undertrumping is never allowed unless you hold nothing but trumps.
+Amsterdam Klaverjassen — what you must play:
+
+1. **Follow suit** if you can. When trump is led, follow and play **higher** if you can.
+2. Can't follow and **your partner is winning the trick**? You **don't have to trump** — play any
+   card, except that you may not undertrump a trump already in the trick.
+3. Otherwise you **must trump**. If a trump is already down you **must overtrump** if you can;
+   if you can't, play a card of **another suit**.
+4. **No undertrumping** — a lower trump is only allowed when you hold nothing but trumps.
+
+(Rotterdam rules differ: there you must always trump, even over your partner.)
+
 Declaring team must score more than the opponents (points + roem) or go *nat*. Roem: runs
 (3 = 20, 4 = 50) and *stuk* (trump K+Q = 20). 16 deals; highest cumulative total wins. Full
 reference is in the in-game **Rules** panel.
+
+## Setting up a copy of this repo
+Pushing to `main` runs the tests, deploys the web app and builds the APK. For a fresh copy:
+- **Web app:** Settings → Pages → Source: **GitHub Actions** (workflow `pages.yml`).
+- **Android signing:** follow the steps at the top of `.github/workflows/keystore.yml` once to
+  create the signing secrets. Without them the APK falls back to debug signing, which breaks
+  self-updates.
+- **Self-update target:** `REPO` in `app/www/update.js` must point at your repo.
 
 ---
 
