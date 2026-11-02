@@ -1,6 +1,6 @@
 /* ============================================================
    Klaverjassen Online — authoritative game server
-   Node + Express + Socket.IO. Rotterdam rules. Bots fill empties.
+   Node + Express + Socket.IO. Amsterdam rules. Bots fill empties.
 
    The game logic lives in game-room.js (shared with the mobile app, where a
    phone acts as host over WebRTC). This file is just the Socket.IO transport:

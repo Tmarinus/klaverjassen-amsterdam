@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Klaverjassen Online — Rotterdam Rules</title>
+<title>Klaverjassen Online — Amsterdam Rules</title>
 <style>
   :root{   /* Theme A · Grand Casino (default) */
     --felt:#0b6b3a;--felt2:#0a5730;--felt3:#063d22;--gold:#e8c766;--card:#fbfbf5;--red:#c62828;--black:#1c1c1c;
@@ -241,7 +241,7 @@
     </div>
   </div>
   <div id="side">
-    <h1>Klaverjassen Online<small>Rotterdam rules · play with friends</small></h1>
+    <h1>Klaverjassen Online<small>Amsterdam rules · play with friends</small></h1>
     <div id="log"></div>
     <button id="rulesbtn">📖 Rules &amp; obligations</button>
   </div>
@@ -308,7 +308,7 @@ function showWelcome(){
   const preCode=(params.get('room')||'').toUpperCase();
   const ov=modal('welcome',`
     <h2>Klaverjassen Online</h2>
-    <p>Rotterdam rules, 4 players. Empty seats are played by bots, so you can start with any number of friends.</p>
+    <p>Amsterdam rules, 4 players. Empty seats are played by bots, so you can start with any number of friends.</p>
     <div class="field"><label>Your name</label><input id="nm" maxlength="16" placeholder="e.g. Sandor" value="${escapeHtml(myName)}"></div>
     <button class="btn wide" id="createBtn">Create a table</button>
     <div class="sep">or join one</div>
@@ -434,8 +434,9 @@ function obligation(){
   if(haveLed) return 'Follow suit ('+SUIT_SYM[led]+').';
   if(hand.some(c=>c.suit===tr)){
     const trumped=st.trick.some(p=>p.card.suit===tr);
+    if(trickWinnerSeat(st.trick,tr)===(st.mySeat+2)%4) return trumped?'Void, partner is winning — no need to trump (no undertrumping).':'Void, partner is winning — play anything.';
     if(!trumped) return 'Void — you must trump in.';
-    return 'Void — you must trump, over- if you can (even over your partner!).';
+    return (st.legal||[]).some(id=>id.startsWith(tr))?'Void — you must overtrump.':'Void, cannot overtrump — play another suit (no undertrumping).';
   }
   return 'Void of suit & trump — discard anything.';
 }
@@ -569,11 +570,13 @@ document.getElementById('leaveBtn').onclick=()=>{ if(confirm('Leave this table?'
 
 /* rules modal */
 document.getElementById('rulesbtn').onclick=()=>{
-  const ov=modal('rules',`<div style="max-width:560px"><h2>Rotterdam Klaverjassen</h2><div id="ruleText">
-    <h3>The Rotterdam obligations</h3>
-    <b>1.</b> Follow the led suit if you can.<br><b>2.</b> If you can't, you <b>must trump</b>.<br>
-    <b>3.</b> With a trump already down you <b>must overtrump</b> if able — <b>even over your own partner</b> (the signature Rotterdam rule).<br>
-    <b>4.</b> If you can't overtrump, you must still <b>undertrump</b> (play a lower trump). You may only discard when you hold no trump at all.
+  const ov=modal('rules',`<div style="max-width:560px"><h2>Amsterdam Klaverjassen</h2><div id="ruleText">
+    <h3>The Amsterdam obligations</h3>
+    <b>1.</b> Follow the led suit if you can.<br>
+    <b>2.</b> If you can't and <b>your partner is winning the trick</b>, you may play <b>any card</b> (the signature Amsterdam rule).<br>
+    <b>3.</b> Otherwise you <b>must trump</b>; with a trump already down you <b>must overtrump</b> if able.<br>
+    <b>4.</b> You may <b>never undertrump</b>: if you can't overtrump, play a card of another suit. A lower trump is only allowed when you hold nothing but trumps.<br>
+    <b>5.</b> When trump is led you must follow and play higher if able.
     <h3>Card values</h3>
     <table class="vt"><tr><td><b>Trump</b></td><td>J 20</td><td>9 14</td><td>A 11</td><td>10 10</td><td>K 4</td><td>Q 3</td><td>8/7 0</td></tr>
     <tr><td><b>Plain</b></td><td>A 11</td><td>10 10</td><td>K 4</td><td>Q 3</td><td>J 2</td><td colspan="2">9/8/7 0</td></tr></table>

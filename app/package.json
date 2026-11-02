@@ -2,7 +2,7 @@
   "name": "klaverjassen-app",
   "version": "1.0.0",
   "private": true,
-  "description": "Klaverjassen (Rotterdam rules) — offline solo + peer-to-peer multiplayer mobile app",
+  "description": "Klaverjassen (Amsterdam rules) — offline solo + peer-to-peer multiplayer mobile app",
   "scripts": {
     "sync-assets": "node scripts/sync-assets.js",
     "serve": "node scripts/sync-assets.js && node scripts/serve.js",

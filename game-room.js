@@ -114,7 +114,7 @@ class GameRoom {
     // Random starting dealer each match, so the host (seat 0) isn't always first to choose trump.
     this.g = { deal: 0, cumulative: [0, 0], firstDealer: Math.floor(Math.random() * 4) };
     this.log = [];
-    this.addLog('deal', `Match start — ${this.matchDeals} deals, Rotterdam rules. North &amp; South vs East &amp; West. Bots: <b>${this.botLevel}</b>.`);
+    this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: <b>${this.botLevel}</b>.`);
     this.newDeal();
   }
 

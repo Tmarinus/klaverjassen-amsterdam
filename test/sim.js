@@ -97,6 +97,39 @@ function check(name, ok, detail) {
   check(`162-point total (${DEALS} mixed deals)`, badTotal === 0, `${badTotal} deals off 162`);
 })();
 
+/* ---- Amsterdam obligations: hand-built positions with a known answer ---- */
+(function amsterdamRules() {
+  const C = (suit, rank) => ({ suit, rank });
+  const ids = cs => cs.map(E.cardId).sort().join(',');
+  const T = 'hearts';
+  // seat 3 to play, void in clubs, holding the 7 and Q of trump and two spades
+  const hand = [C('hearts', '7'), C('hearts', 'Q'), C('spades', 'A'), C('spades', '8')];
+  const spades = [hand[2], hand[3]];
+  const onlyTrumps = [C('hearts', '7'), C('hearts', 'Q')];
+  const cases = [
+    // partner (seat 1) winning with a plain card, no trump down: free choice
+    ['partner winning, no trump down', hand, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('clubs', 'A') }, { seat: 2, card: C('clubs', '7') }], hand],
+    // partner trumped with the K: no need to trump, but no undertrumping either
+    ['partner trumped', hand, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('hearts', 'K') }, { seat: 2, card: C('clubs', '7') }], spades],
+    // partner trumped with the 8: may overtrump partner (Q) or play another suit, not the 7
+    ['partner trumped low', hand, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('hearts', '8') }, { seat: 2, card: C('clubs', '7') }], [hand[1], hand[2], hand[3]]],
+    // opponent winning, no trump down: must trump
+    ['opponent winning, no trump down', hand, [{ seat: 0, card: C('clubs', 'A') }, { seat: 1, card: C('clubs', '8') }, { seat: 2, card: C('clubs', '7') }], onlyTrumps],
+    // opponent trumped with the K, can't overtrump: must play another suit
+    ['opponent trumped, cannot overtrump', hand, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('clubs', '7') }, { seat: 2, card: C('hearts', 'K') }], spades],
+    // opponent trumped with the 8: must overtrump with the Q
+    ['opponent trumped, can overtrump', hand, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('clubs', '7') }, { seat: 2, card: C('hearts', '8') }], [hand[1]]],
+    // nothing but (lower) trumps: undertrumping is then forced
+    ['only lower trumps left', onlyTrumps, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('clubs', '7') }, { seat: 2, card: C('hearts', 'K') }], onlyTrumps],
+    // trump led, can't go higher: must still follow trump
+    ['trump led, cannot go higher', hand, [{ seat: 0, card: C('hearts', 'J') }, { seat: 1, card: C('hearts', '8') }, { seat: 2, card: C('hearts', '9') }], onlyTrumps],
+  ];
+  let bad = [];
+  for (const [name, h, trick, want] of cases)
+    if (ids(E.legalMoves(h, trick, T)) !== ids(want)) bad.push(name);
+  check('Amsterdam obligations (hand-built positions)', bad.length === 0, bad.length ? 'wrong: ' + bad.join('; ') : `${cases.length} cases`);
+})();
+
 /* ---- 3: strength ordering easy < normal < hard < family (match level) ---- */
 // One 16-deal match: strong = team 0, weak = team 1. Returns the cumulative points.
 function playMatch(strong, weak, timing) {

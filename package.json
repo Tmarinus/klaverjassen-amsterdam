@@ -2,7 +2,7 @@
   "name": "klaverjassen-online",
   "version": "1.0.0",
   "private": true,
-  "description": "Online Klaverjassen (Rotterdam rules) — play with friends across networks",
+  "description": "Online Klaverjassen (Amsterdam rules) — play with friends across networks",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

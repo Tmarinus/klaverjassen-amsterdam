@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Klaverjassen — Rotterdam Rules</title>
+<title>Klaverjassen — Amsterdam Rules</title>
 <style>
   :root{   /* Theme A · Grand Casino (default) */
     --felt:#0b6b3a; --felt2:#0a5730; --felt3:#063d22; --gold:#e8c766; --ink:#12241a;
@@ -260,7 +260,7 @@
     </div>
   </div>
   <div id="side">
-    <h1>Klaverjassen<small>Rotterdam rules · you vs 3 bots</small></h1>
+    <h1>Klaverjassen<small>Amsterdam rules · you vs 3 bots</small></h1>
     <div id="log"></div>
     <button id="rulesbtn">📖 Rules &amp; obligations</button>
   </div>
@@ -268,7 +268,7 @@
 
 <script>
 /* ============================================================
-   Klaverjassen — Rotterdam rules
+   Klaverjassen — Amsterdam rules
    4 players, 2 teams. You = South (seat 0). Partner = North (2).
    Opponents West (1) & East (3). Play is clockwise: 0→1→2→3.
    ============================================================ */
@@ -318,13 +318,15 @@ function trickWinnerSeat(trick,trump){
   return trick[idx].seat;
 }
 
-/* ---------- Rotterdam legal-move logic ----------
+/* ---------- Amsterdam legal-move logic ----------
    1. Must follow the led suit if able.
-   2. If void of led suit, must play a trump (if you hold one) — introeven verplicht.
-   3. When a trump is already in the trick you must OVERTRUMP if you can — and this
-      applies even when your partner is currently winning (the Rotterdam signature).
-   4. If you cannot overtrump an existing trump, you are free to play anything.
+   2. If void of led suit and your partner is currently winning the trick, you need
+      not trump (the Amsterdam signature) — but you may not undertrump.
+   3. Otherwise, if void of led suit, must play a trump (if you hold one) — introeven.
+   4. When a trump is already in the trick you must OVERTRUMP if you can; if you
+      cannot, you must play a card of another suit (no undertrumping).
    5. If trump is led, you must follow trump and overtrump the highest trump if able.
+   A lower trump is only allowed when you hold nothing but trumps.
 */
 function legalMoves(hand,trick,trump){
   if(trick.length===0) return hand.slice();
@@ -343,9 +345,14 @@ function legalMoves(hand,trick,trump){
   const hasLed=hand.filter(c=>c.suit===led);
   if(hasLed.length) return hasLed;                // follow suit
   if(!myTrumps.length) return hand.slice();       // no led suit, no trump -> discard anything
-  if(trumpsInTrick.length===0) return myTrumps;   // nobody trumped yet -> must trump
   const higher=myTrumps.filter(c=>TRUMP_STR[c.rank]>highTrump);
-  return higher.length?higher:hand.slice();       // must overtrump if able, else free
+  const others=hand.filter(c=>c.suit!==trump);
+  if(trickWinnerSeat(trick,trump)===(trick[0].seat+trick.length+2)%4){   // partner winning -> free, no undertrump
+    const ok=others.concat(higher); return ok.length?ok:hand.slice();
+  }
+  if(trumpsInTrick.length===0) return myTrumps;   // nobody trumped yet -> must trump
+  if(higher.length) return higher;                // must overtrump if able
+  return others.length?others:hand.slice();       // else another suit — never undertrump (unless only trumps)
 }
 
 /* ---------- roem on a completed 4-card trick ---------- */
@@ -372,7 +379,7 @@ function computeRoem(cards,trump){
 function newMatch(){
   state={ deal:0, cumulative:[0,0] };
   logClear();
-  log('deal','Match start — 16 deals, Rotterdam rules. You are South; North is your partner.');
+  log('deal','Match start — 16 deals, Amsterdam rules. You are South; North is your partner.');
   newDeal();
 }
 
@@ -510,6 +517,7 @@ const ALL_CARDS=[]; for(const s of SUITS) for(const r of RANKS) ALL_CARDS.push({
 const cid=c=>c.suit+c.rank;
 const vLow =(a,tr)=>a.reduce((x,y)=>cardVal(x,tr)<=cardVal(y,tr)?x:y);
 const vHigh=(a,tr)=>a.reduce((x,y)=>cardVal(x,tr)>=cardVal(y,tr)?x:y);
+const schmear=(a,tr)=>{ const nonT=a.filter(c=>c.suit!==tr); return vHigh(nonT.length?nonT:a,tr); };   // never waste a trump on partner's trick
 
 function botChooseTrump(seat){
   const hand=state.hands[seat];
@@ -559,7 +567,7 @@ function normalPlay(seat,tr,legal){
   if(winSeat===partner){
     const wc=state.trick.find(t=>t.seat===winSeat).card;
     const solid=last||wc.suit===tr||wc.rank==='A';
-    if(solid) return vHigh(legal,tr);
+    if(solid) return schmear(legal,tr);
     if(winners.length) return vLow(winners,tr);
     return vLow(legal,tr);
   }
@@ -582,7 +590,7 @@ function hardPlay(seat,tr,legal){
   const winners=legal.filter(c=>trickWinnerSeat(state.trick.concat([{seat,card:c}]),tr)===seat);
   if(winSeat===partner){
     const wc=state.trick.find(t=>t.seat===winSeat).card;
-    if(last||wc.suit===tr||wc.rank==='A'||unbeatableCard(wc,tr,unseen)) return vHigh(legal,tr);
+    if(last||wc.suit===tr||wc.rank==='A'||unbeatableCard(wc,tr,unseen)) return schmear(legal,tr);
     if(winners.length) return vLow(winners,tr);
     return dumpLowCard(legal,tr);
   }
@@ -605,7 +613,7 @@ function reconstructDealF(played,tr,chooser){
     for(let k=0;k<group.length;k++){
       const s=(leader+k)%4, c=group[k];
       playedBySeat[s].push(c);
-      if(k>0&&c.suit!==led){ voids[s].add(led); if(led!==tr&&c.suit!==tr) voids[s].add(tr); }
+      if(k>0&&c.suit!==led){ voids[s].add(led); const bf=seatCards.slice(0,k); if(led!==tr&&c.suit!==tr&&!bf.some(t=>t.card.suit===tr)&&teamOf(trickWinnerSeat(bf,tr))!==teamOf(s)) voids[s].add(tr); }   // only a discard that broke 'must trump in' proves a trump void
     }
     if(group.length===4){
       const w=trickWinnerSeat(seatCards,tr), tm=teamOf(w);
@@ -662,7 +670,7 @@ function rolloutPickF(seat,trick,tr,legal,others){
   const winners=legal.filter(c=>trickWinnerSeat(trick.concat([{seat,card:c}]),tr)===seat);
   if(winSeat===partner){
     const wc=trick.find(t=>t.seat===winSeat).card;
-    if(last||wc.suit===tr||wc.rank==='A'||unbeatableCard(wc,tr,others)) return vHigh(legal,tr);
+    if(last||wc.suit===tr||wc.rank==='A'||unbeatableCard(wc,tr,others)) return schmear(legal,tr);
     if(winners.length) return vLow(winners,tr);
     return dumpLowCard(legal,tr);
   }
@@ -848,9 +856,10 @@ function describeObligation(legal){
   if(led===tr) return haveLed?'Trump led — you must follow & overtrump if you can.':'Trump led — you hold none, play anything.';
   if(haveLed) return `Follow suit (${SUIT_SYM[led]}).`;
   if(state.hands[0].some(c=>c.suit===tr)){
+    if(trickWinnerSeat(state.trick,tr)===2) return 'Void, partner is winning — play anything.';
     const trumped=state.trick.some(t=>t.card.suit===tr);
     if(!trumped) return 'Void — you must trump in.';
-    return legal.some(c=>c.suit===tr)?'Void — you must overtrump if you can (even over your partner!).':'Void, cannot overtrump — play anything.';
+    return legal.some(c=>c.suit===tr)?'Void — you must overtrump if you can.':'Void, cannot overtrump — play another suit (no undertrumping).';
   }
   return 'Void of suit & trump — discard anything.';
 }
@@ -941,13 +950,13 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 /* ---------- rules modal ---------- */
 document.getElementById('rulesbtn').addEventListener('click',()=>{
   const ov=document.createElement('div'); ov.className='overlay';
-  ov.innerHTML=`<div class="modal" style="max-width:560px"><h2>Rotterdam Klaverjassen</h2><div id="ruleText">
-    <h3>The Rotterdam obligations</h3>
+  ov.innerHTML=`<div class="modal" style="max-width:560px"><h2>Amsterdam Klaverjassen</h2><div id="ruleText">
+    <h3>The Amsterdam obligations</h3>
     <b>1.</b> Follow the led suit if you can.<br>
-    <b>2.</b> If you can't follow suit, you <b>must play a trump</b> (introeven).<br>
-    <b>3.</b> When a trump is already on the table you <b>must overtrump</b> it if you can —
-       <b>even when your own partner is winning</b>. This is the signature Rotterdam rule.<br>
-    <b>4.</b> If you can't overtrump an existing trump, you may play anything.
+    <b>2.</b> If you can't follow suit and <b>your partner is winning the trick</b>, you may play
+       <b>any card</b>. This is the signature Amsterdam rule.<br>
+    <b>3.</b> Otherwise you <b>must play a trump</b> (introeven), and <b>overtrump</b> a trump already on the table if you can.<br>
+    <b>4.</b> You may <b>never undertrump</b>: if you can't overtrump, play a card of another suit. A lower trump is only allowed when you hold nothing but trumps.
     <h3>Card values</h3>
     <table class="vt"><tr><td><b>Trump</b></td><td>J 20</td><td>9 14</td><td>A 11</td><td>10 10</td><td>K 4</td><td>Q 3</td><td>8/7 0</td></tr>
     <tr><td><b>Plain</b></td><td>A 11</td><td>10 10</td><td>K 4</td><td>Q 3</td><td>J 2</td><td colspan="2">9/8/7 0</td></tr></table>

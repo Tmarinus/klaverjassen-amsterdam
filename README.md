@@ -1,4 +1,4 @@
-# Klaverjassen (Rotterdam rules)
+# Klaverjassen (Amsterdam rules)
 
 Play Klaverjassen — solo against bots, or with up to 3 friends across the internet.
 Any empty seats are played by the AI, so a game can start with 1–4 humans.
@@ -21,7 +21,7 @@ and the Android app all interoperate.
 Artifacts. Same game, native. (iOS: the Capacitor project supports it, but building needs a Mac.)
 
 ## Repo layout
-- `engine.js` — pure Rotterdam rules engine (deal, legal moves, roem, scoring, bot AI). Verified by simulation.
+- `engine.js` — pure Amsterdam rules engine (deal, legal moves, roem, scoring, bot AI). Verified by simulation.
 - `game-room.js` — transport-agnostic game-flow orchestrator (shared by the server and the app).
 - `app/` — the peer-to-peer web app + Capacitor Android project. See [`app/README.md`](app/README.md).
   - `app/www/` — the site published to GitHub Pages (index.html + net.js + generated `lib/`).
@@ -32,9 +32,10 @@ Artifacts. Same game, native. (iOS: the Capacitor project supports it, but build
   gated in CI by `.github/workflows/test.yml`.
 
 ## Rules
-Rotterdam Klaverjassen: follow suit; if void you **must trump**; with a trump already down you
-**must overtrump** if you can — *even over your partner* — and if you can't overtrump you must
-still **undertrump** (play a lower trump), discarding only when you hold no trump at all.
+Amsterdam Klaverjassen: follow suit; if void and **your partner is winning the trick** you may
+play **any card** (but no undertrumping). Otherwise you **must trump**; with a trump already down
+you **must overtrump** if you can, and if you can't you must play a card of **another suit** —
+undertrumping is never allowed unless you hold nothing but trumps.
 Declaring team must score more than the opponents (points + roem) or go *nat*. Roem: runs
 (3 = 20, 4 = 50) and *stuk* (trump K+Q = 20). 16 deals; highest cumulative total wins. Full
 reference is in the in-game **Rules** panel.

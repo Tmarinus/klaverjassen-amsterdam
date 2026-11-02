@@ -1,5 +1,5 @@
 /* ============================================================
-   Klaverjassen rules engine — Rotterdam rules (server-authoritative)
+   Klaverjassen rules engine — Amsterdam rules (server-authoritative)
    Pure functions, no I/O. Shared by server.js.
    Verified against a 20k-deal simulation (0 illegal moves, points
    always total 162).
@@ -58,11 +58,13 @@ function trickWinnerSeat(trick, trump) {
   return trick[winnerIndex(trick.map(t => t.card), trump)].seat;
 }
 
-/* ---- Rotterdam legal moves ----
-   follow suit; else must trump; when a trump is down you must overtrump if
-   able (even over your partner); if you can't overtrump you must still
-   undertrump (play a lower trump). You may only discard when you hold no
-   trump at all. */
+/* ---- Amsterdam legal moves ----
+   follow suit (when trump is led: follow and go higher if able). If void:
+   - partner currently winning: no obligation to trump — any card, except that
+     you may not undertrump a trump already in the trick;
+   - otherwise you must trump; with a trump already down you must overtrump if
+     able, and if you can't you must play a card of another suit (never undertrump).
+   A lower trump is only allowed when you hold nothing but trumps. */
 function legalMoves(hand, trick, trump) {
   if (trick.length === 0) return hand.slice();
   const led = trick[0].card.suit;
@@ -72,16 +74,23 @@ function legalMoves(hand, trick, trump) {
   if (led === trump) {
     if (myTrumps.length) {
       const higher = myTrumps.filter(c => TRUMP_STR[c.rank] > highTrump);
-      return higher.length ? higher : myTrumps;
+      return higher.length ? higher : myTrumps;      // must follow trump, so a lower one when that's all you have
     }
     return hand.slice();
   }
   const hasLed = hand.filter(c => c.suit === led);
   if (hasLed.length) return hasLed;
   if (!myTrumps.length) return hand.slice();
-  if (trumpsInTrick.length === 0) return myTrumps;
   const higher = myTrumps.filter(c => TRUMP_STR[c.rank] > highTrump);
-  return higher.length ? higher : myTrumps;   // must undertrump; can't discard while holding trump
+  const others = hand.filter(c => c.suit !== trump);
+  const partner = (trick[0].seat + trick.length + 2) % 4;   // seat to play is leader + trick.length
+  if (trickWinnerSeat(trick, trump) === partner) {           // partner winning: free, but no undertrumping
+    const ok = others.concat(higher);
+    return ok.length ? ok : hand.slice();
+  }
+  if (trumpsInTrick.length === 0) return myTrumps;           // must trump in
+  if (higher.length) return higher;                          // must overtrump
+  return others.length ? others : hand.slice();              // can't overtrump: another suit, never undertrump
 }
 
 function computeRoem(cards, trump) {
@@ -117,6 +126,8 @@ for (const s of SUITS) for (const r of RANKS) ALL_CARDS.push({ suit: s, rank: r 
 
 const valLow  = (arr, tr) => arr.reduce((x, y) => cardVal(x, tr) <= cardVal(y, tr) ? x : y);
 const valHigh = (arr, tr) => arr.reduce((x, y) => cardVal(x, tr) >= cardVal(y, tr) ? x : y);
+// schmear onto a winning partner: richest non-trump first, so a free discard never wastes a top trump
+const schmear = (arr, tr) => { const nonT = arr.filter(c => c.suit !== tr); return valHigh(nonT.length ? nonT : arr, tr); };
 const strOf   = (c, tr) => (c.suit === tr ? TRUMP_STR[c.rank] : PLAIN_STR[c.rank]);
 
 function botChooseTrump(hand, level = 'normal') {
@@ -185,7 +196,7 @@ function normalPlay(seat, trick, trump, legal) {
   if (winSeat === partner) {
     const wc = trick.find(t => t.seat === winSeat).card;
     const solid = last || wc.suit === trump || wc.rank === 'A';
-    if (solid) return valHigh(legal, trump);
+    if (solid) return schmear(legal, trump);
     if (winners.length) return valLow(winners, trump);
     return valLow(legal, trump);
   }
@@ -221,7 +232,7 @@ function hardPlay(seat, hand, trick, trump, legal, played, chooser) {
   if (winSeat === partner) {                         // partner winning
     const wc = trick.find(t => t.seat === winSeat).card;
     // schmear on every case Normal would, plus card-counted certain wins
-    if (last || wc.suit === trump || wc.rank === 'A' || unbeatable(wc, trump, unseen)) return valHigh(legal, trump);
+    if (last || wc.suit === trump || wc.rank === 'A' || unbeatable(wc, trump, unseen)) return schmear(legal, trump);
     if (winners.length) return valLow(winners, trump);   // beatable partner: secure the trick ourselves
     return dumpLow(legal, trump);                         // else shed lowest, keep trumps
   }
@@ -255,7 +266,13 @@ function reconstructDeal(played, trump, chooser) {
       playedBySeat[s].push(c);
       if (k > 0 && c.suit !== led) {                 // failed to follow the led suit -> void in it
         voids[s].add(led);
-        if (led !== trump && c.suit !== trump) voids[s].add(trump);   // discarded, so void in trump too
+        // discarded while an opponent was winning and no trump was down -> void in trump
+        // too. (A discard onto a winning partner is free, and one over an opponent's
+        // trump only shows they couldn't overtrump, so neither proves a trump void.)
+        const before = seatCards.slice(0, k);
+        if (led !== trump && c.suit !== trump && !before.some(t => t.card.suit === trump) &&
+            teamOf(trickWinnerSeat(before, trump)) !== teamOf(s))
+          voids[s].add(trump);
       }
     }
     if (group.length === 4) {                        // complete trick: bank it and find next leader
@@ -326,7 +343,7 @@ function rolloutPick(seat, trick, trump, legal, others) {
   const winners = legal.filter(c => trickWinnerSeat(trick.concat([{ seat, card: c }]), trump) === seat);
   if (winSeat === partner) {
     const wc = trick.find(t => t.seat === winSeat).card;
-    if (last || wc.suit === trump || wc.rank === 'A' || unbeatable(wc, trump, others)) return valHigh(legal, trump);
+    if (last || wc.suit === trump || wc.rank === 'A' || unbeatable(wc, trump, others)) return schmear(legal, trump);
     if (winners.length) return valLow(winners, trump);
     return dumpLow(legal, trump);
   }
