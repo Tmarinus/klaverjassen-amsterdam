@@ -210,7 +210,7 @@ function check(name, ok, detail) {
     if (JSON.stringify(ex).includes(snap.tokens[0][1])) bad.push('export leaks seat token');
   } catch (e) { bad.push(e.message); }
   check('resume from snapshot + debug export', bad.length === 0, bad.length ? bad.join('; ') : '4-deal match resumed mid-trick, 162/deal, 0 illegal');
-})().then(drawTrumpMode).then(strength);
+})().then(drawTrumpMode).then(seatLevels).then(strength);
 
 /* ---- draw-trump mode: play/pass round, forced redraw, first player still leads ---- */
 async function drawTrumpMode() {
@@ -250,6 +250,34 @@ async function drawTrumpMode() {
     }
   }
   check('draw-trump mode (pass round, redraw, leader vs declarer)', bad.length === 0, bad.length ? bad.join('; ') : 'all-pass, take, 2 bot matches');
+}
+
+/* ---- per-seat bot levels: each bot plays its own level, host can change one mid-match ---- */
+async function seatLevels() {
+  const R = require(path.join(__dirname, '..', 'game-room.js'));
+  const fast = { botThink: 0, trumpThink: 0, trickLinger: 0, dealAuto: 0 };
+  const bad = [], seen = [new Set(), new Set(), new Set(), new Set()];
+  const orig = E.chooseBotCard;
+  E.chooseBotCard = (seat, hand, trick, trump, opts) => { seen[seat].add(opts.level); return orig(seat, hand, trick, trump, opts); };
+  try {
+    const m = new R.GameRoom('L', { botLevel: 'normal', seatLevels: [null, 'easy', 'hard', 'bogus'], matchDeals: 4, timings: fast });
+    m.addHuman('h', 'Host'); m.seats[0].connected = false;           // away host: covered at the table default
+    if (m.seatLevels[3] !== null) bad.push('unknown level accepted');
+    m.handle('x', 'setSeatLevel', { seat: 1, level: 'family' });        // not the host: ignored
+    if (m.levelOf(1) !== 'easy') bad.push('non-host changed a bot level');
+    m.startGame();
+    await new Promise(res => (function poll() { if (m.curDeal() && m.curDeal().plays.length >= 8) return res(); setTimeout(poll, 1); })());
+    m.handle('h', 'setSeatLevel', { seat: 3, level: 'family' });        // mid-match change
+    const snap = JSON.parse(JSON.stringify(m.snapshot()));
+    await new Promise((res, rej) => { const t0 = Date.now(); (function poll() { if (m.phase === 'matchover') return res(); if (Date.now() - t0 > 60000) return rej(new Error('match timeout')); setTimeout(poll, 1); })(); });
+    const got = seen.map(x => [...x].sort().join('+'));
+    if (got[0] !== 'normal' || got[1] !== 'easy' || got[2] !== 'hard' || got[3] !== 'family+normal') bad.push(`levels used per seat: ${got.join(' / ')}`);
+    const r = new R.GameRoom('L', {}); r.restore(snap);
+    if (r.levelOf(1) !== 'easy' || r.levelOf(3) !== 'family') bad.push('seat levels lost on resume');
+    if (m.viewFor(0).seats[2].level !== 'hard') bad.push('view lacks seat level');
+  } catch (e) { bad.push(e.message); }
+  E.chooseBotCard = orig;
+  check('per-seat bot levels', bad.length === 0, bad.length ? bad.join('; ') : 'away host normal, W easy, N hard, E normal→family mid-match, survives resume');
 }
 
 function strength() {

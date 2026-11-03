@@ -132,6 +132,7 @@ io.on('connection', (socket) => {
   };
   socket.on('claimSeat', forward('claimSeat'));
   socket.on('setDifficulty', forward('setDifficulty'));
+  socket.on('setSeatLevel', forward('setSeatLevel'));
   socket.on('setHandRoem', forward('setHandRoem'));
   socket.on('callRoem', forward('callRoem'));
   socket.on('setTrumpMode', forward('setTrumpMode'));

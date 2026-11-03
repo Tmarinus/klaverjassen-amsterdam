@@ -19,6 +19,11 @@ Open it on a PC or phone browser, pick a name, then:
 - **🌐 Host a game** — you get a 4-letter code; share it with friends.
 - **Join** — enter a friend's code.
 
+**Bot levels:** Easy, Normal, Hard or Family (strongest), for all bots at once or **per bot**:
+the *Per bot* row on the start screen (West/North/East, used for solo and as the host's
+defaults), the seat cards in the lobby, or **⚙ View → 🤖 Bot levels** during a match (host only;
+takes effect from that bot's next move). A player who drops out is covered at the *All bots* level.
+
 Multiplayer is **peer-to-peer** (WebRTC via the free PeerJS matchmaker) — **no server to run**.
 Everyone just needs internet; the host keeps their tab/app open. PC browsers, phone browsers,
 and the Android app all interoperate.

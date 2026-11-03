@@ -75,6 +75,7 @@ function createSolo(opts) {
   const me = opts.playerId;
   const room = new GameRoom('SOLO', {
     botLevel: opts.botLevel || 'normal',
+    seatLevels: opts.seatLevels,
     handRoem: !!opts.handRoem,
     trumpMode: opts.trumpMode,
     send(pid, event, payload) { if (pid === me) net._fire(event, payload); },
@@ -107,6 +108,7 @@ function createHost(opts) {
 
   const room = new GameRoom(code, {
     botLevel: opts.botLevel || 'normal',
+    seatLevels: opts.seatLevels,
     handRoem: !!opts.handRoem,
     trumpMode: opts.trumpMode,
     send(pid, event, payload) {

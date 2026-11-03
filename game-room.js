@@ -23,6 +23,7 @@ const sym = s => SYM[s];
 
 const DEFAULT_TIMINGS = { botThink: 850, trumpThink: 1000, trickLinger: 2400, dealAuto: 10000 };
 const DEFAULT_MATCH_DEALS = 16;
+const LEVELS = ['easy', 'normal', 'hard', 'family'];
 
 // Per-seat reconnection secret. A client proves it owns a seat by presenting the
 // token the room issued to it (delivered only in that player's own private view),
@@ -44,7 +45,8 @@ class GameRoom {
     this.log = [];
     this.timers = new Set();
     this.advanced = false;
-    this.botLevel = opts.botLevel || 'normal';     // easy | normal | hard | family
+    this.botLevel = opts.botLevel || 'normal';     // easy | normal | hard | family — table default
+    this.seatLevels = [0, 1, 2, 3].map(i => (opts.seatLevels && LEVELS.includes(opts.seatLevels[i])) ? opts.seatLevels[i] : null);   // per-seat override
     this.handRoem = !!opts.handRoem;               // host option: roem in hand may be called
     this.trumpMode = opts.trumpMode === 'draw' ? 'draw' : 'choose';   // host option: how trump is set
     this.spectators = new Map();                   // playerId -> { name }
@@ -125,9 +127,9 @@ class GameRoom {
     // Random starting dealer each match, so the host (seat 0) isn't always first to choose trump.
     this.g = { deal: 0, cumulative: [0, 0], firstDealer: Math.floor(Math.random() * 4) };
     this.match = (this.match || 0) + 1;
-    this.note('matchStart', { match: this.match, botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode, seats: this.seats.map(s => ({ name: s.name, isBot: s.isBot })) });
+    this.note('matchStart', { match: this.match, botLevel: this.botLevel, seatLevels: this.seats.map((s, i) => this.levelOf(i)), handRoem: this.handRoem, trumpMode: this.trumpMode, seats: this.seats.map(s => ({ name: s.name, isBot: s.isBot })) });
     this.log = [];
-    this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: <b>${this.botLevel}</b>.` +
+    this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: ${this.botsLabel()}.` +
       (this.handRoem ? ' Roem in hand: <b>on</b> (call it before your first card).' : '') +
       (this.trumpMode === 'draw' ? ' Trump is <b>drawn</b>: play on it or pass.' : ''));
     this.newDeal();
@@ -208,6 +210,13 @@ class GameRoom {
     else if (this.phase === 'choosing') this.scheduleBotTrump(seat);
   }
 
+  levelOf(seat) { return this.seatLevels[seat] || this.botLevel; }
+  botsLabel() {
+    const bots = [0, 1, 2, 3].filter(i => this.seats[i] && this.seats[i].isBot);
+    const lv = bots.map(i => this.levelOf(i));
+    if (!bots.length || lv.every(l => l === lv[0])) return `<b>${lv[0] || this.botLevel}</b>`;
+    return bots.map(i => `${SEAT_LABEL[i]} <b>${this.levelOf(i)}</b>`).join(', ');
+  }
   isAuto(seat) { const s = this.seats[seat]; return !s || s.isBot || !s.connected; }
   name(seat) { const s = this.seats[seat]; return s ? s.name : SEAT_LABEL[seat]; }
 
@@ -218,8 +227,8 @@ class GameRoom {
       if (this.phase !== 'choosing' || !this.isAuto(seat)) return;
       const g = this.g;
       if (this.trumpMode === 'draw') {
-        if (g.bid && !g.bid.forced && g.bid.turn === seat) this.bid(seat, E.botTakeTrump(g.hands[seat], g.bid.suit, this.botLevel));
-      } else if (g.chooser === seat) this.setTrump(E.botChooseTrump(g.hands[seat], this.botLevel));
+        if (g.bid && !g.bid.forced && g.bid.turn === seat) this.bid(seat, E.botTakeTrump(g.hands[seat], g.bid.suit, this.levelOf(seat)));
+      } else if (g.chooser === seat) this.setTrump(E.botChooseTrump(g.hands[seat], this.levelOf(seat)));
     });
   }
 
@@ -245,7 +254,7 @@ class GameRoom {
       if (this.phase !== 'playing' || this.g.turn !== seat || !this.isAuto(seat)) return;
       if (!this.g.hands[seat].length) return;
       if (this.canCallRoem(seat)) this.callRoem(seat);   // bots always call their hand roem
-      const card = E.chooseBotCard(seat, this.g.hands[seat], this.g.trick, this.g.trump, { level: this.botLevel, played: this.g.played, chooser: this.g.declarer, leader: this.g.chooser, calledRoem: this.g.calledRoem });
+      const card = E.chooseBotCard(seat, this.g.hands[seat], this.g.trick, this.g.trump, { level: this.levelOf(seat), played: this.g.played, chooser: this.g.declarer, leader: this.g.chooser, calledRoem: this.g.calledRoem });
       if (card) this.doPlay(seat, card);
     });
   }
@@ -379,8 +388,13 @@ class GameRoom {
         if (this.phase === 'lobby' && this.hostId === playerId) this.startGame();
         break;
       case 'setDifficulty':
-        if (this.hostId === playerId && this.phase === 'lobby' && ['easy', 'normal', 'hard', 'family'].includes(data.level)) {
-          this.botLevel = data.level; this.broadcast();
+        if (this.hostId === playerId && this.phase === 'lobby' && LEVELS.includes(data.level)) {
+          this.botLevel = data.level; this.seatLevels = [null, null, null, null]; this.broadcast();
+        }
+        break;
+      case 'setSeatLevel':   // one bot's level; null = back to the table default. Allowed mid-match too.
+        if (this.hostId === playerId && data.seat >= 0 && data.seat <= 3 && (data.level === null || LEVELS.includes(data.level))) {
+          this.seatLevels[data.seat] = data.level; this.note('setSeatLevel', { seat: data.seat, level: data.level }); this.broadcast();
         }
         break;
       case 'setHandRoem':
@@ -431,7 +445,7 @@ class GameRoom {
   snapshot() {
     return {
       v: 1, savedAt: Date.now(), code: this.code, phase: this.phase, hostId: this.hostId,
-      seats: this.seats, tokens: [...this.tokens], botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode,
+      seats: this.seats, tokens: [...this.tokens], botLevel: this.botLevel, seatLevels: this.seatLevels, handRoem: this.handRoem, trumpMode: this.trumpMode,
       matchDeals: this.matchDeals, match: this.match, advanced: this.advanced,
       log: this.log, g: this.g, history: this.history, events: this.events,
     };
@@ -439,7 +453,7 @@ class GameRoom {
   restore(snap) {
     Object.assign(this, {
       code: snap.code, phase: snap.phase, hostId: snap.hostId, seats: snap.seats,
-      tokens: new Map(snap.tokens), botLevel: snap.botLevel, handRoem: !!snap.handRoem, trumpMode: snap.trumpMode || 'choose',
+      tokens: new Map(snap.tokens), botLevel: snap.botLevel, seatLevels: snap.seatLevels || [null, null, null, null], handRoem: !!snap.handRoem, trumpMode: snap.trumpMode || 'choose',
       matchDeals: snap.matchDeals, match: snap.match, advanced: snap.advanced,
       log: snap.log || [], g: snap.g, history: snap.history || [], events: snap.events || [],
     });
@@ -489,7 +503,7 @@ class GameRoom {
       format: 'klaverjassen-debug/1', exportedAt: new Date().toISOString(),
       note: 'Seats: 0 South, 1 West, 2 North, 3 East. "*" in readable = played by a human; legal = cards allowed at that moment.',
       code: this.code, phase: this.phase, botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode,
-      seats: this.seats.map((s, i) => s && { seat: i, label: SEAT_LABEL[i], name: s.name, isBot: s.isBot, connected: s.connected }),
+      seats: this.seats.map((s, i) => s && { seat: i, label: SEAT_LABEL[i], name: s.name, isBot: s.isBot, connected: s.connected, level: this.levelOf(i) }),
       events: this.events, history: this.history, readable,
     }, meta || {});
   }
@@ -505,6 +519,7 @@ class GameRoom {
       team: E.teamOf(i),
       cardCount: g && g.hands ? g.hands[i].length : 0,
       isHost: s && s.playerId === this.hostId,
+      level: this.levelOf(i),                      // what a bot here plays (also covers an away human)
     }));
     const base = {
       code: this.code, phase: this.phase, mySeat,

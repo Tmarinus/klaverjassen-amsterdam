@@ -176,6 +176,10 @@
   .diffbtn:hover:not(:disabled){background:var(--btnhov)}
   .diffbtn.on{background:var(--gold);color:var(--goldink);border-color:var(--gold)}
   .diffbtn:disabled{cursor:default;opacity:.85}
+  .seatlvls{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .seatlvls label{font-size:11px;color:var(--dim);font-weight:600;display:flex;align-items:center;gap:4px}
+  .lvlsel{background:var(--btn);color:var(--txt);border:1px solid var(--panelbd);border-radius:7px;padding:4px 6px;font-size:12px;font-weight:700}
+  .lseat .lvl{font-size:11.5px;color:var(--dim);margin-top:6px;display:flex;align-items:center;gap:6px}
   #cheat{position:absolute;left:10px;bottom:10px;z-index:35;width:250px;background:var(--pop);border:1px solid var(--panelbd);border-radius:10px;padding:9px 11px 10px;box-shadow:0 6px 20px #0007;font-size:12px}
   #cheat.hidden{display:none}
   .cheat-hd{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:12.5px;color:var(--gold);margin-bottom:7px}
@@ -218,6 +222,9 @@
           <div class="pop-hd">View</div>
           <div class="pop-row"><span class="pi">🕓</span>Last trick<button class="switch" id="lastTrickSw" role="switch" aria-checked="true" aria-label="Last-trick recap"></button></div>
           <div class="pop-row"><span class="pi">🃏</span>Cheat sheet<button class="switch" id="cheatSw" role="switch" aria-checked="true" aria-label="Card cheat sheet"></button></div>
+          <div class="pop-sep"></div>
+          <div class="pop-hd">Bots</div>
+          <button class="pop-act" id="botLvlBtn" role="menuitem"><span class="pi">🤖</span>Bot levels</button>
           <div class="pop-sep"></div>
           <div class="pop-hd">Debug</div>
           <button class="pop-act" id="exportBtn" role="menuitem"><span class="pi">🐞</span>Export game log</button>
@@ -301,6 +308,11 @@ function trickWinnerSeat(trick,trump){
   return trick[bi].seat;
 }
 let myDiff=localStorage.getItem('kj_diff')||'normal';
+const LEVELS=['easy','normal','hard','family'], cap=l=>l[0].toUpperCase()+l.slice(1);
+// per-seat bot level for new tables (null = same as "Bot difficulty"); index = seat (0 South … 3 East)
+let mySeatDiff=(()=>{ try{ const a=JSON.parse(localStorage.getItem('kj_seatdiff')); if(Array.isArray(a)&&a.length===4) return a.map(l=>LEVELS.includes(l)?l:null); }catch(e){} return [null,null,null,null]; })();
+const saveSeatDiff=()=>localStorage.setItem('kj_seatdiff',JSON.stringify(mySeatDiff));
+const lvlSelect=(seat,level,dis)=>`<select class="lvlsel" data-seat="${seat}" ${dis?'disabled':''}>${LEVELS.map(l=>`<option value="${l}" ${l===level?'selected':''}>${cap(l)}</option>`).join('')}</select>`;
 let myHandRoem=localStorage.getItem('kj_handroem')==='1';   // host option: roem in hand
 let myTrumpMode=localStorage.getItem('kj_trumpmode')==='draw'?'draw':'choose';   // host option: choose or draw trump
 const modeBtns=(mode,dis)=>[['choose','Choose'],['draw','Draw']].map(([v,l])=>`<button class="diffbtn ${mode===v?'on':''}" data-m="${v}" ${dis?'disabled':''}>${l}</button>`).join('');
@@ -354,8 +366,11 @@ function showWelcome(){
     <h2>Klaverjassen</h2>
     <p>Amsterdam rules · 4 players. Empty seats are played by bots.</p>
     <div class="field"><label>Your name</label><input id="nm" maxlength="16" placeholder="e.g. Sandor" value="${escapeHtml(myName)}"></div>
-    <div class="diffrow"><span class="difflbl">Bot difficulty</span><div class="diffbtns" id="wDiff">${
+    <div class="diffrow"><span class="difflbl">All bots</span><div class="diffbtns" id="wDiff">${
       ['easy','normal','hard','family'].map(l=>`<button class="diffbtn ${myDiff===l?'on':''}" data-l="${l}">${l[0].toUpperCase()+l.slice(1)}</button>`).join('')
+    }</div></div>
+    <div class="diffrow"><span class="difflbl">Per bot</span><div class="seatlvls" id="wSeats">${
+      [[1,'West'],[2,'North'],[3,'East']].map(([i,n])=>`<label>${n} ${lvlSelect(i,mySeatDiff[i]||myDiff)}</label>`).join('')
     }</div></div>
     <div class="diffrow"><span class="difflbl">Roem in hand</span><div class="diffbtns" id="wRoem">${onOffBtns(myHandRoem)}</div></div>
     <div class="diffrow"><span class="difflbl">Trump</span><div class="diffbtns" id="wMode">${modeBtns(myTrumpMode)}</div></div>
@@ -371,7 +386,10 @@ function showWelcome(){
   ov.querySelectorAll('#wDiff .diffbtn').forEach(b=>b.onclick=()=>{
     myDiff=b.dataset.l; localStorage.setItem('kj_diff',myDiff);
     ov.querySelectorAll('#wDiff .diffbtn').forEach(x=>x.classList.toggle('on',x.dataset.l===myDiff));
+    mySeatDiff=[null,null,null,null]; saveSeatDiff();            // "all bots" resets the per-bot picks
+    ov.querySelectorAll('#wSeats .lvlsel').forEach(x=>{ x.value=myDiff; });
   });
+  ov.querySelectorAll('#wSeats .lvlsel').forEach(x=>x.onchange=()=>{ mySeatDiff[+x.dataset.seat]=x.value===myDiff?null:x.value; saveSeatDiff(); });
   ov.querySelectorAll('#wRoem .diffbtn').forEach(b=>b.onclick=()=>{
     myHandRoem=b.dataset.r==='on'; localStorage.setItem('kj_handroem',myHandRoem?'1':'0');
     ov.querySelectorAll('#wRoem .diffbtn').forEach(x=>x.classList.toggle('on',(x.dataset.r==='on')===myHandRoem));
@@ -380,8 +398,8 @@ function showWelcome(){
     myTrumpMode=b.dataset.m; localStorage.setItem('kj_trumpmode',myTrumpMode);
     ov.querySelectorAll('#wMode .diffbtn').forEach(x=>x.classList.toggle('on',x.dataset.m===myTrumpMode));
   });
-  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,trumpMode:myTrumpMode,onSave:saveRoom('solo')})); };
-  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,trumpMode:myTrumpMode,onSave:saveRoom('host')})); };
+  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff,seatLevels:mySeatDiff,handRoem:myHandRoem,trumpMode:myTrumpMode,onSave:saveRoom('solo')})); };
+  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff,seatLevels:mySeatDiff,handRoem:myHandRoem,trumpMode:myTrumpMode,onSave:saveRoom('host')})); };
   const join=c=>{ saveName(); teardownNet(); toast('Connecting to '+c+'…'); bindNet(KJNet.createClient({playerId,name:myName,code:c,getToken:()=>seatToken})); };
   ov.querySelector('#joinBtn').onclick=()=>{ const c=ov.querySelector('#jc').value.trim().toUpperCase(); if(c.length<4)return toast('Enter a 4-letter code',true); join(c); };
   const rb=ov.querySelector('#rejoinBtn'); if(rb) rb.onclick=()=>join(rejoin);
@@ -439,7 +457,7 @@ function renderSeats(){
       inner+=`<div class="backrow${vert}">${backs}</div>`;
     }
     const nm=`<div class="name">${escapeHtml(s.name)}${meTag}${s.isBot?' 🤖':''}</div>`;
-    const tag=`<div class="teamtag ${teamName}">${TEAM_LBL[s.team]}${s.present&&!s.connected&&!s.isBot?' · away':''}</div>`;
+    const tag=`<div class="teamtag ${teamName}">${TEAM_LBL[s.team]}${s.isBot&&st.phase!=='lobby'?' · '+cap(s.level):''}${s.present&&!s.connected&&!s.isBot?' · away':''}</div>`;
     inner = (pos===2)? nm+tag+inner : (pos===0? nm+tag : inner+nm+tag);
     el.innerHTML=inner;
   }
@@ -551,9 +569,10 @@ function renderLobbyModal(){
     const mine=seat===st.mySeat;
     const taken=s.present;
     const who = taken? escapeHtml(s.name)+(s.isHost?' 👑':'')+(mine?' (you)':'') : 'Open — click to sit';
+    const lvl = taken&&!s.isBot ? '' : `<div class="lvl">🤖 Bot ${iAmHost?lvlSelect(seat,s.level):'<b>'+cap(s.level)+'</b>'}</div>`;
     return `<div class="lseat t${seat%2} ${mine?'mine':''} ${taken?'taken':''}" data-seat="${seat}">
       <div class="pos">${['South','West','North','East'][seat]} · ${TEAM_LBL[seat%2]}</div>
-      <div class="who">${who}</div></div>`;
+      <div class="who">${who}</div>${lvl}</div>`;
   }).join('');
   ov.querySelector('.modal').innerHTML=`
     <h2>Table lobby</h2>
@@ -561,15 +580,16 @@ function renderLobbyModal(){
     <div class="codebig">${st.code}</div>
     <button class="btn sec" id="copyLink">📋 Copy table code</button>
     <div class="lobbyseats">${seatCards}</div>
-    <div class="diffrow"><span class="difflbl">Bot difficulty</span><div class="diffbtns">${
-      ['easy','normal','hard','family'].map(l=>`<button class="diffbtn ${st.botLevel===l?'on':''}" data-l="${l}" ${iAmHost?'':'disabled'}>${l[0].toUpperCase()+l.slice(1)}</button>`).join('')
+    <div class="diffrow"><span class="difflbl">All bots</span><div class="diffbtns">${
+      LEVELS.map(l=>`<button class="diffbtn ${st.botLevel===l?'on':''}" data-l="${l}" ${iAmHost?'':'disabled'}>${cap(l)}</button>`).join('')
     }</div></div>
     <div class="diffrow"><span class="difflbl">Roem in hand</span><div class="diffbtns" id="lRoem">${onOffBtns(!!st.handRoem,!iAmHost)}</div></div>
     <div class="diffrow"><span class="difflbl">Trump</span><div class="diffbtns" id="lMode">${modeBtns(st.trumpMode||'choose',!iAmHost)}</div></div>
     <p style="margin:6px 0 12px">${iAmHost?'Empty seats become bots when you start.':'Waiting for the host to start…'}</p>
     ${iAmHost?'<button class="btn wide" id="startBtn">Start match ▶</button>':''}
   `;
-  ov.querySelectorAll('.lseat').forEach(el=>el.onclick=()=>{ const seat=+el.dataset.seat; if(seat!==st.mySeat) net.emit('claimSeat',{seat}); });
+  ov.querySelectorAll('.lseat').forEach(el=>el.onclick=e=>{ if(e.target.closest('.lvlsel')) return; const seat=+el.dataset.seat; if(seat!==st.mySeat) net.emit('claimSeat',{seat}); });
+  ov.querySelectorAll('.lseat .lvlsel').forEach(x=>x.onchange=()=>emitSeatLevel(+x.dataset.seat,x.value));
   ov.querySelectorAll('.diffbtn[data-l]').forEach(b=>b.onclick=()=>{ if(iAmHost) net.emit('setDifficulty',{level:b.dataset.l}); });
   ov.querySelectorAll('#lMode .diffbtn').forEach(b=>b.onclick=()=>{ if(iAmHost){ myTrumpMode=b.dataset.m; localStorage.setItem('kj_trumpmode',myTrumpMode); net.emit('setTrumpMode',{mode:myTrumpMode}); } });
   ov.querySelectorAll('#lRoem .diffbtn').forEach(b=>b.onclick=()=>{ if(iAmHost){ myHandRoem=b.dataset.r==='on'; localStorage.setItem('kj_handroem',myHandRoem?'1':'0'); net.emit('setHandRoem',{on:myHandRoem}); } });
@@ -602,6 +622,11 @@ const STATS_KEY='kj_stats';
 let statsRecorded=false;                              // one record per match
 function blankStats(){ return {games:0,wins:0,losses:0,ties:0,pf:0,pa:0,streak:0,bestStreak:0,byLevel:{}}; }
 function loadStats(){ try{ return Object.assign(blankStats(),JSON.parse(localStorage.getItem(STATS_KEY))||{}); }catch(e){ return blankStats(); } }
+// solo record is kept per bot level; a table with bots on different levels counts as "mixed"
+function statsLevel(){
+  const lv=st?st.seats.filter(x=>x.isBot).map(x=>x.level):[];
+  return !lv.length?myDiff:lv.every(l=>l===lv[0])?lv[0]:'mixed';
+}
 function recordSoloResult(we,they){
   const s=loadStats();
   s.games++; s.pf+=we; s.pa+=they;
@@ -609,7 +634,7 @@ function recordSoloResult(we,they){
   else if(we<they){ s.losses++; s.streak=s.streak<0?s.streak-1:-1; }
   else { s.ties++; s.streak=0; }
   s.bestStreak=Math.max(s.bestStreak,s.streak);
-  const bl=s.byLevel[myDiff]||{games:0,wins:0}; bl.games++; if(we>they) bl.wins++; s.byLevel[myDiff]=bl;
+  const lv=statsLevel(), bl=s.byLevel[lv]||{games:0,wins:0}; bl.games++; if(we>they) bl.wins++; s.byLevel[lv]=bl;
   try{ localStorage.setItem(STATS_KEY,JSON.stringify(s)); }catch(e){}
   return s;
 }
@@ -617,7 +642,7 @@ function statsHtml(s){
   if(!s||!s.games) return '';
   const pct=Math.round(100*s.wins/s.games);
   const streakTxt=s.streak>0?`${s.streak}-win streak 🔥`:s.streak<0?`${-s.streak}-loss streak`:'—';
-  const bl=s.byLevel[myDiff]; const blTxt=bl&&bl.games?` · vs ${myDiff}: ${bl.wins}/${bl.games}`:'';
+  const lv=statsLevel(), bl=s.byLevel[lv]; const blTxt=bl&&bl.games?` · vs ${lv}: ${bl.wins}/${bl.games}`:'';
   return `<div class="summary" style="margin-top:10px">
     <div class="row big"><span>Your record vs bots</span><span>${s.wins}–${s.losses}${s.ties?'–'+s.ties:''} (${pct}%)</span></div>
     <div class="row" style="opacity:.7;font-size:12px"><span>${s.games} matches · ${streakTxt} · best ${s.bestStreak}W${blTxt}</span><span></span></div>
@@ -676,6 +701,24 @@ function openView(open){ viewPop.classList.toggle('open',open); viewBtn.setAttri
 viewBtn.onclick=e=>{ e.stopPropagation(); openView(!viewPop.classList.contains('open')); };
 
 /* debug export: the host (or solo player) owns the room, so it can dump every deal */
+// host: change one bot's level, before or during a match (takes effect on its next move)
+function emitSeatLevel(seat,level){ if(net) net.emit('setSeatLevel',{seat,level:level===st.botLevel?null:level}); }
+function renderBotLevels(){
+  const bots=st.seats.filter(x=>x.isBot);
+  const ov=modal('levels',`<h2>Bot levels</h2>
+    <p>Takes effect from the bot's next move.</p>
+    ${bots.map(x=>`<div class="diffrow"><span class="difflbl">${['South','West','North','East'][x.seat]} · ${escapeHtml(x.name)}</span>${lvlSelect(x.seat,x.level)}</div>`).join('')||'<p>No bots at this table.</p>'}
+    <button class="btn wide" id="lvlDone" style="margin-top:12px">Done</button>`);
+  ov.querySelectorAll('.lvlsel').forEach(x=>x.onchange=()=>emitSeatLevel(+x.dataset.seat,x.value));
+  ov.querySelector('#lvlDone').onclick=()=>closeModal('levels');
+}
+document.getElementById('botLvlBtn').onclick=()=>{
+  openView(false);
+  if(!net||!st) return toast('Start a game first.',true);
+  if(!net.isHost) return toast('Only the host can change the bots.',true);
+  if(st.phase==='lobby') return toast('Set the bots on the seat cards in the lobby.');
+  renderBotLevels();
+};
 document.getElementById('exportBtn').onclick=async()=>{
   openView(false);
   if(!net||!net.room) return toast(net?'Only the host can export — ask them to.':'Start or join a game first.',true);
