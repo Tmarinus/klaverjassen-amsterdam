@@ -49,7 +49,14 @@ class GameRoom {
     this.spectators = new Map();                   // playerId -> { name }
     this.tokens = new Map();                        // playerId -> seat reconnection token
     this.g = null;                                 // game state
+    this.history = [];                             // debug record: one entry per deal (see export())
+    this.events = [];                              // debug record: connections, resumes, warnings
+    this.onChange = opts.onChange || null;         // called after every broadcast (host autosave)
   }
+
+  /* --- debug record --- */
+  note(type, info) { this.events.push(Object.assign({ t: Date.now(), type }, info)); if (this.events.length > 500) this.events.shift(); }
+  curDeal() { return this.history[this.history.length - 1]; }
 
   /* --- seat auth --- */
   tokenFor(playerId) { return this.tokens.get(playerId) || null; }
@@ -79,7 +86,9 @@ class GameRoom {
   }
   setConnected(playerId, on) {
     const seat = this.seatOf(playerId);
-    if (seat >= 0) this.seats[seat].connected = on;
+    if (seat < 0) return;
+    if (this.seats[seat].connected !== on) this.note(on ? 'reconnect' : 'disconnect', { seat, name: this.seats[seat].name });
+    this.seats[seat].connected = on;
   }
   addSpectator(playerId, name) { this.spectators.set(playerId, { name: name || 'Spectator' }); }
   removeSpectator(playerId) { this.spectators.delete(playerId); }
@@ -114,6 +123,8 @@ class GameRoom {
     for (let s = 0; s < 4; s++) if (!this.seats[s]) this.seats[s] = { playerId: 'bot' + s, name: 'Bot ' + SEAT_LABEL[s], isBot: true, connected: true };
     // Random starting dealer each match, so the host (seat 0) isn't always first to choose trump.
     this.g = { deal: 0, cumulative: [0, 0], firstDealer: Math.floor(Math.random() * 4) };
+    this.match = (this.match || 0) + 1;
+    this.note('matchStart', { match: this.match, botLevel: this.botLevel, handRoem: this.handRoem, seats: this.seats.map(s => ({ name: s.name, isBot: s.isBot })) });
     this.log = [];
     this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: <b>${this.botLevel}</b>.` +
       (this.handRoem ? ' Roem in hand: <b>on</b> (call it before your first card).' : ''));
@@ -137,6 +148,10 @@ class GameRoom {
       roemCalled: [false, false, false, false], calledRoem: [0, 0],
       lastResult: null,
     });
+    this.history.push({
+      match: this.match, deal: g.deal, dealer, chooser, trump: null,
+      hands: hands.map(h => h.map(E.cardId)), plays: [], roemCalls: [], tricks: [], result: null,
+    });
     this.phase = 'choosing';
     this.addLog('deal', `— Deal ${g.deal} — ${this.name(dealer)} deals. ${this.name(chooser)} chooses trump.`);
     this.broadcast();
@@ -158,6 +173,7 @@ class GameRoom {
     if (this.phase !== 'choosing' || !E.SUITS.includes(suit)) return;
     const g = this.g;
     g.trump = suit;
+    this.curDeal().trump = suit;
     g.hands.forEach(h => h.sort(E.handComparator(suit)));
     this.phase = 'playing';
     this.addLog('deal', `Trump is ${sym(suit)} — chosen by ${this.name(g.chooser)}.`);
@@ -190,6 +206,7 @@ class GameRoom {
     if (!this.canCallRoem(seat)) return;
     const g = this.g, tm = E.teamOf(seat), { roem, labels } = E.handRoem(g.hands[seat], g.trump);
     g.roemCalled[seat] = true;
+    this.curDeal().roemCalls.push({ seat, roem, labels, auto: this.isAuto(seat) });
     g.dealRoem[tm] += roem; g.calledRoem[tm] += roem;
     this.addLog('roem', `${this.name(seat)} calls roem +${roem}: ${labels.join(', ')}.`);
     this.broadcast();
@@ -214,6 +231,11 @@ class GameRoom {
     const g = this.g, h = g.hands[seat];
     const i = h.findIndex(c => c.suit === card.suit && c.rank === card.rank);
     if (i < 0) return;
+    // record the move with the legal set it was chosen from; flag anything outside it
+    const legal = E.legalMoves(h, g.trick, g.trump).map(E.cardId), cid = E.cardId(card);
+    const rec = { trick: g.trickNo + 1, seat, card: cid, auto: this.isAuto(seat), legal, t: Date.now() };
+    if (!legal.includes(cid)) { rec.illegal = true; this.note('illegalMove', { deal: g.deal, seat, card: cid, legal }); }
+    this.curDeal().plays.push(rec);
     h.splice(i, 1);
     g.trick.push({ seat, card });
     g.played.push(card);                  // deal history for card-counting (hard bots)
@@ -234,6 +256,7 @@ class GameRoom {
     const { roem, labels } = E.computeRoem(cards, tr);
     g.dealCard[tm] += pts; g.dealRoem[tm] += roem; g.tricksWon[tm]++;
     g.trickNo++;
+    this.curDeal().tricks.push({ n: g.trickNo, leader: trick[0].seat, cards: trick.map(t => E.cardId(t.card)), winner, pts, roem, labels });
     let msg = `Trick ${g.trickNo}: ${this.name(winner)} wins (${pts} pts).`;
     if (roem) msg += ` Roem +${roem}: ${labels.join(', ')}.`;
     this.addLog(roem ? 'roem' : '', msg);
@@ -273,6 +296,7 @@ class GameRoom {
       deal: g.deal, play, opp, playPts, oppPts, nat, pitPlay, pitOpp, awarded, totalRoem,
       trump: g.trump, chooser: g.chooser, cumulative: g.cumulative.slice(),
     };
+    this.curDeal().result = Object.assign({ dealCard: g.dealCard.slice(), dealRoem: g.dealRoem.slice(), tricksWon: g.tricksWon.slice() }, g.lastResult);
     this.phase = g.deal >= this.matchDeals ? 'matchover' : 'scored';
     this.broadcast();
     if (this.phase === 'scored') this.after(this.timings.dealAuto, () => this.advance());
@@ -335,6 +359,76 @@ class GameRoom {
       if (s && !s.isBot && s.connected) this.send(s.playerId, 'state', this.viewFor(this.seatOf(s.playerId)));
     }
     for (const pid of this.spectators.keys()) this.send(pid, 'state', this.viewFor(-1));
+    if (this.onChange) { try { this.onChange(); } catch (e) {} }
+  }
+
+  /* ============================================================
+                 SAVE / RESUME + DEBUG EXPORT
+     snapshot() is plain JSON (cards are {suit,rank}), so the host can keep it in
+     localStorage and resume the same table after a reload or crash.
+     ============================================================ */
+  snapshot() {
+    return {
+      v: 1, savedAt: Date.now(), code: this.code, phase: this.phase, hostId: this.hostId,
+      seats: this.seats, tokens: [...this.tokens], botLevel: this.botLevel, handRoem: this.handRoem,
+      matchDeals: this.matchDeals, match: this.match, advanced: this.advanced,
+      log: this.log, g: this.g, history: this.history, events: this.events,
+    };
+  }
+  restore(snap) {
+    Object.assign(this, {
+      code: snap.code, phase: snap.phase, hostId: snap.hostId, seats: snap.seats,
+      tokens: new Map(snap.tokens), botLevel: snap.botLevel, handRoem: !!snap.handRoem,
+      matchDeals: snap.matchDeals, match: snap.match, advanced: snap.advanced,
+      log: snap.log || [], g: snap.g, history: snap.history || [], events: snap.events || [],
+    });
+  }
+  // Restart the game clock after restore(): every remote player starts disconnected
+  // (bots cover them until they reconnect) and whatever timer was pending re-arms.
+  resume() {
+    this.clearTimers();
+    for (const s of this.seats) if (s && !s.isBot && s.playerId !== this.hostId) s.connected = false;
+    this.note('resume', { phase: this.phase });
+    this.addLog('', 'Table resumed by the host.');
+    const g = this.g;
+    if (this.phase === 'playing') {
+      if (g.resolving && g.trickNo === 8) this.after(600, () => this.scoreDeal());
+      else if (g.resolving) this.after(this.timings.trickLinger, () => this.resolveTrick());
+      else this.nextTurn();
+    } else if (this.phase === 'choosing') {
+      if (this.isAuto(g.chooser)) this.scheduleBotTrump(g.chooser);
+    } else if (this.phase === 'scored') {
+      this.after(this.timings.dealAuto, () => this.advance());
+    }
+    this.broadcast();
+  }
+
+  // Everything needed to replay/debug the match: settings, seats, every deal's
+  // starting hands, each card played (with the legal set it came from), roem
+  // calls, trick results, scores, and connection events. Plus a readable digest.
+  export(meta) {
+    const S = id => { const m = /^(clubs|diamonds|hearts|spades)(.+)$/.exec(id); return m ? m[2] + SYM[m[1]] : id; };
+    const P = s => SEAT_LABEL[s][0];
+    const readable = [];
+    for (const d of this.history) {
+      readable.push(`Match ${d.match} · Deal ${d.deal}: dealer ${P(d.dealer)}, ${P(d.chooser)} chose ${d.trump ? SYM[d.trump] : '(none yet)'}`);
+      d.hands.forEach((h, s) => readable.push(`  ${P(s)} hand: ${h.map(S).join(' ')}`));
+      d.roemCalls.forEach(r => readable.push(`  ${P(r.seat)} calls roem +${r.roem} (${r.labels.join(', ')})`));
+      for (let n = 1; n <= 8; n++) {
+        const ps = d.plays.filter(p => p.trick === n); if (!ps.length) break;
+        const t = d.tricks.find(x => x.n === n);
+        readable.push(`  T${n}: ` + ps.map(p => `${P(p.seat)} ${S(p.card)}${p.auto ? '' : '*'}${p.illegal ? ' [ILLEGAL]' : ''}`).join(', ') +
+          (t ? ` → ${P(t.winner)} wins ${t.pts}${t.roem ? ' +' + t.roem + ' roem' : ''}` : ''));
+      }
+      if (d.result) readable.push(`  Result: ${d.result.playPts} vs ${d.result.oppPts}${d.result.nat ? ' NAT' : ''} → total ${d.result.cumulative.join(' : ')}`);
+    }
+    return Object.assign({
+      format: 'klaverjassen-debug/1', exportedAt: new Date().toISOString(),
+      note: 'Seats: 0 South, 1 West, 2 North, 3 East. "*" in readable = played by a human; legal = cards allowed at that moment.',
+      code: this.code, phase: this.phase, botLevel: this.botLevel, handRoem: this.handRoem,
+      seats: this.seats.map((s, i) => s && { seat: i, label: SEAT_LABEL[i], name: s.name, isBot: s.isBot, connected: s.connected }),
+      events: this.events, history: this.history, readable,
+    }, meta || {});
   }
 
   viewFor(mySeat) {

@@ -167,6 +167,41 @@ function check(name, ok, detail) {
   check('roem in hand (counting + calling)', bad.length === 0, bad.length ? bad.join('; ') : '6 hands, 3 call checks');
 })();
 
+/* ---- resume + debug export: snapshot mid-match through JSON, finish on a new room ---- */
+(async function resumeAndExport() {
+  const R = require(path.join(__dirname, '..', 'game-room.js'));
+  const fast = { botThink: 0, trumpThink: 0, trickLinger: 0, dealAuto: 0 };
+  const until = (room, ok) => new Promise((res, rej) => {
+    const t0 = Date.now();
+    (function poll() { if (ok(room)) return res(); if (Date.now() - t0 > 60000) return rej(new Error('timeout in ' + room.phase)); setTimeout(poll, 1); })();
+  });
+  const bad = [];
+  try {
+    const a = new R.GameRoom('RS', { handRoem: true, matchDeals: 4, timings: fast });
+    a.addHuman('host', 'Host'); a.seats[0].connected = false;     // host away: bots play it
+    a.startGame();
+    await until(a, r => r.g.deal === 2 && r.phase === 'playing' && r.g.trickNo === 3);
+    const snap = JSON.parse(JSON.stringify(a.snapshot()));
+    a.clearTimers();
+    const b = new R.GameRoom('X', { timings: fast });
+    b.restore(snap); b.resume();
+    await until(b, r => r.phase === 'matchover');
+    const ex = b.export();
+    if (ex.history.length !== 4) bad.push(`${ex.history.length} deals recorded, want 4`);
+    for (const d of ex.history) {
+      const pts = d.tricks.reduce((x, t) => x + t.pts, 0) + 10;
+      if (pts !== 162) bad.push(`deal ${d.deal}: ${pts} card pts`);
+      if (d.plays.length !== 32) bad.push(`deal ${d.deal}: ${d.plays.length} plays`);
+      if (d.plays.some(p => p.illegal)) bad.push(`deal ${d.deal}: illegal move flagged`);
+    }
+    if (!ex.events.some(e => e.type === 'resume')) bad.push('resume not logged');
+    if (!ex.readable.some(l => / T8: /.test(l))) bad.push('readable digest missing tricks');
+    if (JSON.stringify(ex).includes(snap.tokens[0][1])) bad.push('export leaks seat token');
+  } catch (e) { bad.push(e.message); }
+  check('resume from snapshot + debug export', bad.length === 0, bad.length ? bad.join('; ') : '4-deal match resumed mid-trick, 162/deal, 0 illegal');
+})().then(strength);
+
+function strength() {
 /* ---- 3: strength ordering easy < normal < hard < family (match level) ---- */
 // One 16-deal match: strong = team 0, weak = team 1. Returns the cumulative points.
 function playMatch(strong, weak, timing) {
@@ -208,3 +243,4 @@ for (const [strong, weak, matches, thr] of PAIRS) {
 
 console.log(`\n${failures ? failures + ' check(s) FAILED' : 'All checks passed.'}`);
 process.exit(failures ? 1 : 0);
+}

@@ -122,6 +122,10 @@
   #hand .card.illegal{filter:brightness(.6) saturate(.6)}
   #handlabel{font-size:12px;color:var(--dim);min-height:16px;text-align:center}
   #roemcall:empty{display:none}
+  #linkbar{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:70;max-width:calc(100vw - 32px);background:var(--natbg);color:var(--txt);border:1px solid var(--panelbd);border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;box-shadow:0 6px 18px #0008;display:none}
+  #linkbar.show{display:block}
+  .pop-act{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 6px;border:0;background:none;color:var(--txt);font:600 12.5px/1 inherit;border-radius:8px;cursor:pointer;font-family:inherit}
+  .pop-act:hover{background:var(--btnhov)}
   #roemcall .btn{padding:6px 14px;font-size:13px}
   #side{width:290px;background:var(--panel);border-left:1px solid var(--panelbd);display:flex;flex-direction:column}
   #side h1{font-size:16px;margin:0;padding:12px 14px;border-bottom:1px solid var(--panelbd)}
@@ -215,6 +219,9 @@
           <div class="pop-row"><span class="pi">🕓</span>Last trick<button class="switch" id="lastTrickSw" role="switch" aria-checked="true" aria-label="Last-trick recap"></button></div>
           <div class="pop-row"><span class="pi">🃏</span>Cheat sheet<button class="switch" id="cheatSw" role="switch" aria-checked="true" aria-label="Card cheat sheet"></button></div>
           <div class="pop-sep"></div>
+          <div class="pop-hd">Debug</div>
+          <button class="pop-act" id="exportBtn" role="menuitem"><span class="pi">🐞</span>Export game log</button>
+          <div class="pop-sep"></div>
           <div class="pop-hd">Theme</div>
           <button class="theme-opt" data-theme="a" role="menuitemradio" aria-checked="true"><span class="sw" style="background:linear-gradient(135deg,#0b6b3a,#e8c766)"></span>Grand Casino<span class="chk">✓</span></button>
           <button class="theme-opt" data-theme="b" role="menuitemradio" aria-checked="false"><span class="sw" style="background:linear-gradient(135deg,#6b4a2b,#f3e9d2)"></span>Bruine Kroeg<span class="chk">✓</span></button>
@@ -241,6 +248,7 @@
       </div>
       <div class="seat" id="sp-0"></div>
     </div>
+    <div id="linkbar" role="status"></div>
     <div id="handbar">
       <div id="handlabel"></div>
       <div id="roemcall"></div>
@@ -296,10 +304,28 @@ let myDiff=localStorage.getItem('kj_diff')||'normal';
 let myHandRoem=localStorage.getItem('kj_handroem')==='1';   // host option: roem in hand
 const onOffBtns=(on,dis)=>[['off','Off'],['on','On']].map(([v,l])=>`<button class="diffbtn ${(v==='on')===on?'on':''}" data-r="${v}" ${dis?'disabled':''}>${l}</button>`).join('');
 
+// Autosave so a reload / crash / dead battery doesn't lose the table:
+//   kj_save     = {role:'host'|'solo', snap}  — the full room, resumable by its host
+//   kj_lastroom = {code, t}                   — the table a client last joined
+const loadJSON=k=>{ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } };
+const saveRoom=role=>snap=>{ try{ localStorage.setItem('kj_save',JSON.stringify({role,snap})); }catch(e){} };
+function clearSaves(){ try{ localStorage.removeItem('kj_save'); localStorage.removeItem('kj_lastroom'); }catch(e){} }
+const RESUME_MAX_AGE=12*3600*1000;
+function resumableSave(){
+  const sv=loadJSON('kj_save');
+  return sv&&sv.snap&&['choosing','playing','scored'].includes(sv.snap.phase)&&Date.now()-sv.snap.savedAt<RESUME_MAX_AGE&&sv.snap.hostId===playerId?sv:null;
+}
+function showLink(text){ const b=document.getElementById('linkbar'); b.textContent=text||''; b.classList.toggle('show',!!text); }
+
 // Wire a freshly-created transport to the UI. Same event names the old socket used.
 function bindNet(n){
-  net=n;
-  n.on('joined',({code})=>{ closeModal('welcome'); });
+  net=n; showLink('');
+  n.on('joined',({code})=>{ closeModal('welcome'); if(!n.isHost) try{ localStorage.setItem('kj_lastroom',JSON.stringify({code,t:Date.now()})); }catch(e){} });
+  n.on('link',({state,attempt})=>{
+    if(state==='online') showLink('');
+    else if(state==='failed') showLink('⚠ Disconnected — leave and rejoin with the table code.');
+    else showLink(n.isHost?'⚠ Internet lost — friends can\'t reach your table yet. Retrying…':`⚠ Connection lost — reconnecting${attempt?' (try '+attempt+')':''}… a bot plays your cards meanwhile.`);
+  });
   n.on('state',(s)=>{
     if(s){
       if(s.trick&&s.trick.length===4)               // full trick just before it clears → snapshot
@@ -318,6 +344,10 @@ function showWelcome(){
   if(document.getElementById('m-welcome')) return;
   const params=new URLSearchParams(location.search);
   const preCode=(params.get('room')||'').toUpperCase();
+  const sv=resumableSave(), lr=loadJSON('kj_lastroom');
+  const rejoin=!sv&&lr&&lr.code&&Date.now()-lr.t<RESUME_MAX_AGE?lr.code:null;
+  const resumeHtml=sv?`<button class="btn wide" id="resumeBtn">↻ Resume your ${sv.role==='solo'?'solo game':'table '+sv.snap.code} — deal ${sv.snap.g.deal}</button>`
+    :rejoin?`<button class="btn wide" id="rejoinBtn">↻ Rejoin table ${rejoin}</button>`:'';
   const ov=modal('welcome',`
     <h2>Klaverjassen</h2>
     <p>Amsterdam rules · 4 players. Empty seats are played by bots.</p>
@@ -326,6 +356,7 @@ function showWelcome(){
       ['easy','normal','hard','family'].map(l=>`<button class="diffbtn ${myDiff===l?'on':''}" data-l="${l}">${l[0].toUpperCase()+l.slice(1)}</button>`).join('')
     }</div></div>
     <div class="diffrow"><span class="difflbl">Roem in hand</span><div class="diffbtns" id="wRoem">${onOffBtns(myHandRoem)}</div></div>
+    ${resumeHtml}
     <button class="btn wide" id="soloBtn">🤖 Play solo — offline</button>
     <button class="btn wide" id="hostBtn">🌐 Host a game with friends</button>
     <div class="sep">or join a friend's game</div>
@@ -342,9 +373,16 @@ function showWelcome(){
     myHandRoem=b.dataset.r==='on'; localStorage.setItem('kj_handroem',myHandRoem?'1':'0');
     ov.querySelectorAll('#wRoem .diffbtn').forEach(x=>x.classList.toggle('on',(x.dataset.r==='on')===myHandRoem));
   });
-  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem})); };
-  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem})); };
-  ov.querySelector('#joinBtn').onclick=()=>{ const c=ov.querySelector('#jc').value.trim().toUpperCase(); if(c.length<4)return toast('Enter a 4-letter code',true); saveName(); teardownNet(); toast('Connecting to '+c+'…'); bindNet(KJNet.createClient({playerId,name:myName,code:c,token:seatToken})); };
+  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,onSave:saveRoom('solo')})); };
+  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,onSave:saveRoom('host')})); };
+  const join=c=>{ saveName(); teardownNet(); toast('Connecting to '+c+'…'); bindNet(KJNet.createClient({playerId,name:myName,code:c,getToken:()=>seatToken})); };
+  ov.querySelector('#joinBtn').onclick=()=>{ const c=ov.querySelector('#jc').value.trim().toUpperCase(); if(c.length<4)return toast('Enter a 4-letter code',true); join(c); };
+  const rb=ov.querySelector('#rejoinBtn'); if(rb) rb.onclick=()=>join(rejoin);
+  const sb=ov.querySelector('#resumeBtn'); if(sb) sb.onclick=()=>{
+    saveName(); teardownNet();
+    if(sv.role==='solo') bindNet(KJNet.createSolo({playerId,resume:sv.snap,onSave:saveRoom('solo')}));
+    else { toast('Reopening table '+sv.snap.code+'…'); bindNet(KJNet.createHost({playerId,resume:sv.snap,onSave:saveRoom('host')})); }
+  };
   ov.querySelector('#jc').addEventListener('keydown',e=>{ if(e.key==='Enter')ov.querySelector('#joinBtn').click(); });
   nm.focus();
   if(preCode.length===4) setTimeout(()=>toast('Code '+preCode+' ready — enter your name and Join'),300);
@@ -610,6 +648,25 @@ const viewBtn=document.getElementById('viewBtn'), viewPop=document.getElementByI
 const cheatSw=document.getElementById('cheatSw'), lastTrickSw=document.getElementById('lastTrickSw');
 function openView(open){ viewPop.classList.toggle('open',open); viewBtn.setAttribute('aria-expanded',open); viewBtn.classList.toggle('on',open); }
 viewBtn.onclick=e=>{ e.stopPropagation(); openView(!viewPop.classList.contains('open')); };
+
+/* debug export: the host (or solo player) owns the room, so it can dump every deal */
+document.getElementById('exportBtn').onclick=async()=>{
+  openView(false);
+  if(!net||!net.room) return toast(net?'Only the host can export — ask them to.':'Start or join a game first.',true);
+  const data=net.room.export({ client:{ userAgent:navigator.userAgent, url:location.href, native:!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()) } });
+  const text=JSON.stringify(data,null,1);
+  const stamp=new Date().toISOString().slice(0,16).replace(/[-:T]/g,'');
+  const fname=`klaverjassen-${data.code}-${stamp}.json`;
+  if(!data.client.native){                         // browsers: save a file
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'application/json'})); a.download=fname;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    toast('Saved '+fname); return;
+  }
+  try{ await navigator.clipboard.writeText(text); toast('Game log copied — paste it into a message or file'); }   // Android app: no downloads in the WebView
+  catch(e){ toast('Could not copy the log on this device',true); }
+};
+// phones kill the link when the app is backgrounded — retry right away on return
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&net&&net.reconnectNow) net.reconnectNow(); });
 document.addEventListener('click',e=>{ if(!viewPop.contains(e.target)&&e.target!==viewBtn) openView(false); });
 function setCheat(on,persist=true){ showCheat=on; if(persist) localStorage.setItem('kj_cheat',on?'1':'0'); document.getElementById('cheat').classList.toggle('hidden',!on); cheatSw.setAttribute('aria-checked',on); }
 function setLastTrick(on){ showLastTrick=on; localStorage.setItem('kj_lasttrick',on?'1':'0'); lastTrickSw.setAttribute('aria-checked',on); renderLastTrick(); }
@@ -635,7 +692,7 @@ function applyTheme(t,announce){
 }
 document.querySelectorAll('.theme-opt').forEach(o=>o.onclick=e=>{ e.stopPropagation(); applyTheme(o.dataset.theme,true); });
 applyTheme(theme);
-document.getElementById('leaveBtn').onclick=()=>{ if(confirm('Leave this table?')){ net.emit('leave'); history.replaceState(null,'','/'); } };
+document.getElementById('leaveBtn').onclick=()=>{ if(confirm('Leave this table?')){ clearSaves(); net.emit('leave'); history.replaceState(null,'','/'); } };
 
 /* rules modal */
 document.getElementById('rulesbtn').onclick=()=>{

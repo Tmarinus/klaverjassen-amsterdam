@@ -20,6 +20,16 @@ Multiplayer is **peer-to-peer** (WebRTC via the free PeerJS matchmaker) — **no
 Everyone just needs internet; the host keeps their tab/app open. PC browsers, phone browsers,
 and the Android app all interoperate.
 
+**Bad internet?** Players reconnect by themselves when the link drops (a bot plays their cards
+meanwhile, and the banner at the top shows the status). After a reload, use **↻ Rejoin table** on
+the start screen. The host's game is autosaved in the browser, so if the host's page reloads or
+crashes, **↻ Resume your table** reopens it with the same code and everyone reconnects.
+
+**Something looks wrong?** The host (or solo player) can use **⚙ View → 🐞 Export game log**: it
+saves a JSON file (copied to the clipboard in the Android app) with every deal's hands, each card
+played with the cards that were legal at that moment, roem calls, scores and connection events,
+plus a readable digest. Anything outside the legal set is flagged `[ILLEGAL]`.
+
 **Android app:** download
 [klaverjassen.apk](https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest/download/klaverjassen.apk)
 from the latest [Release](https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest) and
