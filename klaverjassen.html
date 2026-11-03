@@ -250,7 +250,7 @@
         <div class="cheat-row"><span class="lbl tr" id="cheatTrumpLbl">Trump</span><div class="tiles" id="cheatTrump"></div></div>
         <div class="cheat-row"><span class="lbl">Plain</span><div class="tiles" id="cheatPlain"></div></div>
         <div class="cheat-arrow">◀ strongest · weakest ▶ &nbsp;·&nbsp; small numbers = card points</div>
-        <div class="cheat-roem"><b>Roem</b> run3 <b>20</b> · run4 <b>50</b> · stuk K+Q <b>20</b> · last trick <b>10</b> · pit <b>100</b></div>
+        <div class="cheat-roem"><b>Roem</b> run3 <b>20</b> · run4 <b>50</b> · stuk K+Q <b>20</b> · 4×J <b>200</b> · 4×Q/K/A <b>100</b> · last trick <b>10</b> · pit <b>100</b></div>
       </div>
       <div class="seat" id="seat-0"><div class="name">You (South)</div><div class="teamtag we">We</div></div>
     </div>
@@ -370,6 +370,9 @@ function computeRoem(cards,trump){
   if(cards.some(c=>c.suit===trump&&c.rank==='K') && cards.some(c=>c.suit===trump&&c.rank==='Q')){
     roem+=20;labels.push('stuk (trump K-Q) +20');
   }
+  // four of a kind: four Jacks 200; four Queens, Kings or Aces 100
+  for(const [r,pts] of [['J',200],['Q',100],['K',100],['A',100]])
+    if(cards.filter(c=>c.rank===r).length===4){roem+=pts;labels.push(`four ${r}s +${pts}`);}
   return {roem,labels};
 }
 
@@ -963,7 +966,8 @@ document.getElementById('rulesbtn').addEventListener('click',()=>{
     152 card points + 10 for the last trick = <b>162</b> per deal.
     <h3>Roem (bonuses)</h3>
     Run of 3 = 20 · run of 4 = 50 ·
-    <b>stuk</b> (trump K+Q) = 20 · run incl. trump K-Q = 40 (3) / 70 (4). Awarded to the team winning that trick.
+    <b>stuk</b> (trump K+Q) = 20 · run incl. trump K-Q = 40 (3) / 70 (4) ·
+    four of a kind: four Jacks = 200, four Queens / Kings / Aces = 100. Awarded to the team winning that trick.
     <h3>Winning a deal</h3>
     The team that chose trump must score <b>more than</b> the opponents (points + roem). If not, they go
     <b>nat</b> and the opponents take all 162 points plus all roem. Winning every trick = <b>pit</b> (+100).

@@ -104,14 +104,22 @@ function computeRoem(cards, trump) {
   if (cards.some(c => c.suit === trump && c.rank === 'K') && cards.some(c => c.suit === trump && c.rank === 'Q')) {
     roem += 20; labels.push('stuk (trump K-Q) +20');
   }
+  for (const q of fourOfAKind(cards)) { roem += q.pts; labels.push(`four ${q.rank}s +${q.pts}`); }
   return { roem, labels };
 }
 
+// Four of a kind ("vier gelijke plaatjes"): four Jacks = 200; four Queens, Kings or Aces = 100.
+const FOUR_PTS = { J: 200, Q: 100, K: 100, A: 100 };
+function fourOfAKind(cards) {
+  return Object.keys(FOUR_PTS).filter(r => cards.filter(c => c.rank === r).length === 4).map(rank => ({ rank, pts: FOUR_PTS[rank] }));
+}
+
 /* Roem held in a hand (optional "roem in hand" variant): every run of 3+ in a
-   suit (3 = 20, 4 = 50, 5+ = 100) plus stuk (trump K+Q = 20). Called before the
+   suit (3 = 20, 4 = 50, 5+ = 100), four of a kind (J 200; Q, K, A 100) plus
+   stuk (trump K+Q = 20). Called before the
    holder's first card; never overlaps trick roem, since one player's cards never
-   share a trick. `labels` name the suits (for the holder / debug log); `announce`
-   is what the table hears: runs without their suit, stuk by name. */
+   share a trick. `labels` name the cards (for the holder / debug log); `announce`
+   is what the table hears: runs and four of a kind without saying which, stuk by name. */
 function handRoem(cards, trump) {
   let roem = 0; const labels = [], announce = [];
   const SYM = { clubs: '♣', diamonds: '♦', hearts: '♥', spades: '♠' };
@@ -131,6 +139,7 @@ function handRoem(cards, trump) {
   if (trump && cards.some(c => c.suit === trump && c.rank === 'K') && cards.some(c => c.suit === trump && c.rank === 'Q')) {
     roem += 20; labels.push('stuk (trump K-Q) +20'); announce.push('stuk (trump K-Q) +20');
   }
+  for (const q of fourOfAKind(cards)) { roem += q.pts; labels.push(`four ${q.rank}s +${q.pts}`); announce.push(`four of a kind +${q.pts}`); }
   return { roem, labels, announce };
 }
 

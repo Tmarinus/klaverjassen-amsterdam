@@ -63,12 +63,13 @@ Amsterdam Klaverjassen — what you must play:
 (Rotterdam rules differ: there you must always trump, even over your partner.)
 
 Declaring team must score more than the opponents (points + roem) or go *nat*. Roem: runs
-(3 = 20, 4 = 50) and *stuk* (trump K+Q = 20) among the four cards of a trick, to the trick's winner.
+(3 = 20, 4 = 50), *stuk* (trump K+Q = 20) and four of a kind (four Jacks = 200; four Queens, Kings
+or Aces = 100) among the four cards of a trick, to the trick's winner.
 
 **Roem in hand** (optional, chosen by the host on the start screen or in the lobby): runs in your
-own hand (3 = 20, 4 = 50, 5+ = 100) and stuk also score for your team, but only if you **call**
+own hand (3 = 20, 4 = 50, 5+ = 100), four of a kind (J 200; Q, K, A 100) and stuk also score for your team, but only if you **call**
 them (the *📣 Call roem* button) before you play your first card of the deal. Bots always call. The table hears only
-what you have, not the suit ("run of 3 +20"); stuk is named.
+what you have, not which cards ("run of 3 +20", "four of a kind +100"); stuk is named.
 
 **Trump: Choose or Draw** (host option). *Choose*: the player left of the dealer names trump.
 *Draw*: a random suit is drawn and offered round the table, starting with the player left of

@@ -144,6 +144,13 @@ function check(name, ok, detail) {
   want('run of 5', [C('clubs', '9'), C('clubs', '10'), C('clubs', 'J'), C('clubs', 'Q'), C('clubs', 'K')], 'hearts', 100);
   want('stuk + trump run', [C('hearts', 'J'), C('hearts', 'Q'), C('hearts', 'K')], 'hearts', 40);
   want('K-Q not trump', [C('spades', 'Q'), C('spades', 'K')], 'hearts', 0);
+  want('four Jacks', ['clubs', 'diamonds', 'hearts', 'spades'].map(x => C(x, 'J')), 'hearts', 200);
+  want('four Aces + clubs run', ['clubs', 'diamonds', 'hearts', 'spades'].map(x => C(x, 'A')).concat([C('clubs', 'K'), C('clubs', 'Q')]), 'spades', 120);
+  want('four Tens score nothing', ['clubs', 'diamonds', 'hearts', 'spades'].map(x => C(x, '10')), 'hearts', 0);
+  const trickRoem = (cards, tr) => E.computeRoem(cards, tr).roem;
+  if (trickRoem(['clubs', 'diamonds', 'hearts', 'spades'].map(x => C(x, 'J')), 'hearts') !== 200) bad.push('trick of four Jacks not 200');
+  if (trickRoem(['clubs', 'diamonds', 'hearts', 'spades'].map(x => C(x, 'K')), 'hearts') !== 100) bad.push('trick of four Kings not 100');
+  if (!/^four of a kind \+200$/.test(E.handRoem(['clubs', 'diamonds', 'hearts', 'spades'].map(x => C(x, 'J')), 'hearts').announce.join())) bad.push('four of a kind announcement reveals rank');
 
   // calling: only once, only before your first card, and only when the host enabled it
   const R = require(path.join(__dirname, '..', 'game-room.js'));
@@ -168,7 +175,7 @@ function check(name, ok, detail) {
   const off = new R.GameRoom('V', { timings: room.timings });
   off.addHuman('me', 'Me'); off.startGame(); off.clearTimers();
   if (off.viewFor(0).handRoem) bad.push('hand roem on by default');
-  check('roem in hand (counting + calling)', bad.length === 0, bad.length ? bad.join('; ') : '6 hands, 3 call checks');
+  check('roem in hand (counting + calling)', bad.length === 0, bad.length ? bad.join('; ') : '9 hands, 2 tricks, 3 call checks');
 })();
 
 /* ---- resume + debug export: snapshot mid-match through JSON, finish on a new room ---- */
