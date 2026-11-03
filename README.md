@@ -1,3 +1,6 @@
+## Forked from https://github.com/Judoka0420/klaverjassen
+Claude created the slop.
+
 # Klaverjassen (Amsterdam rules)
 
 Play Klaverjassen — solo against bots, or with up to 3 friends across the internet.
