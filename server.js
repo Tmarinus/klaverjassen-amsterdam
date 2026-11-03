@@ -134,6 +134,8 @@ io.on('connection', (socket) => {
   socket.on('setDifficulty', forward('setDifficulty'));
   socket.on('setHandRoem', forward('setHandRoem'));
   socket.on('callRoem', forward('callRoem'));
+  socket.on('setTrumpMode', forward('setTrumpMode'));
+  socket.on('bid', forward('bid'));
   socket.on('start', forward('start'));
   socket.on('chooseTrump', forward('chooseTrump'));
   socket.on('play', forward('play'));
@@ -153,8 +155,7 @@ io.on('connection', (socket) => {
         room.setConnected(pid, false);         // bot takes over turns
         room.broadcast();
         // if it is (or becomes) their turn, keep the game moving
-        if (room.phase === 'playing' && room.g.turn === seat) room.nextTurn();
-        else if (room.phase === 'choosing' && room.g.chooser === seat) room.scheduleBotTrump(seat);
+        room.wake(seat);
       } else if (seat >= 0) {
         room.removePlayer(pid);
         if (rooms.has(room.code)) room.broadcast();

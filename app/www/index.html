@@ -302,6 +302,8 @@ function trickWinnerSeat(trick,trump){
 }
 let myDiff=localStorage.getItem('kj_diff')||'normal';
 let myHandRoem=localStorage.getItem('kj_handroem')==='1';   // host option: roem in hand
+let myTrumpMode=localStorage.getItem('kj_trumpmode')==='draw'?'draw':'choose';   // host option: choose or draw trump
+const modeBtns=(mode,dis)=>[['choose','Choose'],['draw','Draw']].map(([v,l])=>`<button class="diffbtn ${mode===v?'on':''}" data-m="${v}" ${dis?'disabled':''}>${l}</button>`).join('');
 const onOffBtns=(on,dis)=>[['off','Off'],['on','On']].map(([v,l])=>`<button class="diffbtn ${(v==='on')===on?'on':''}" data-r="${v}" ${dis?'disabled':''}>${l}</button>`).join('');
 
 // Autosave so a reload / crash / dead battery doesn't lose the table:
@@ -356,6 +358,7 @@ function showWelcome(){
       ['easy','normal','hard','family'].map(l=>`<button class="diffbtn ${myDiff===l?'on':''}" data-l="${l}">${l[0].toUpperCase()+l.slice(1)}</button>`).join('')
     }</div></div>
     <div class="diffrow"><span class="difflbl">Roem in hand</span><div class="diffbtns" id="wRoem">${onOffBtns(myHandRoem)}</div></div>
+    <div class="diffrow"><span class="difflbl">Trump</span><div class="diffbtns" id="wMode">${modeBtns(myTrumpMode)}</div></div>
     ${resumeHtml}
     <button class="btn wide" id="soloBtn">🤖 Play solo — offline</button>
     <button class="btn wide" id="hostBtn">🌐 Host a game with friends</button>
@@ -373,8 +376,12 @@ function showWelcome(){
     myHandRoem=b.dataset.r==='on'; localStorage.setItem('kj_handroem',myHandRoem?'1':'0');
     ov.querySelectorAll('#wRoem .diffbtn').forEach(x=>x.classList.toggle('on',(x.dataset.r==='on')===myHandRoem));
   });
-  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,onSave:saveRoom('solo')})); };
-  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,onSave:saveRoom('host')})); };
+  ov.querySelectorAll('#wMode .diffbtn').forEach(b=>b.onclick=()=>{
+    myTrumpMode=b.dataset.m; localStorage.setItem('kj_trumpmode',myTrumpMode);
+    ov.querySelectorAll('#wMode .diffbtn').forEach(x=>x.classList.toggle('on',x.dataset.m===myTrumpMode));
+  });
+  ov.querySelector('#soloBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); bindNet(KJNet.createSolo({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,trumpMode:myTrumpMode,onSave:saveRoom('solo')})); };
+  ov.querySelector('#hostBtn').onclick=()=>{ saveName(); teardownNet(); clearSaves(); toast('Creating your table…'); bindNet(KJNet.createHost({playerId,name:myName,botLevel:myDiff,handRoem:myHandRoem,trumpMode:myTrumpMode,onSave:saveRoom('host')})); };
   const join=c=>{ saveName(); teardownNet(); toast('Connecting to '+c+'…'); bindNet(KJNet.createClient({playerId,name:myName,code:c,getToken:()=>seatToken})); };
   ov.querySelector('#joinBtn').onclick=()=>{ const c=ov.querySelector('#jc').value.trim().toUpperCase(); if(c.length<4)return toast('Enter a 4-letter code',true); join(c); };
   const rb=ov.querySelector('#rejoinBtn'); if(rb) rb.onclick=()=>join(rejoin);
@@ -404,8 +411,9 @@ function render(){
   const dp=document.getElementById('dealPill');
   if(st.deal){ dp.style.display=''; document.getElementById('dealNo').textContent=st.deal; } else dp.style.display='none';
   const tsym=document.getElementById('trumpSym');
-  tsym.textContent=st.trump?SUIT_SYM[st.trump]:'–';
-  tsym.style.color=st.trump&&SUIT_RED[st.trump]?'#ff7b7b':'#eaf3ec';
+  const shown=st.trump||(st.bid&&st.bid.suit);      // draw mode: the suit on offer, marked '?'
+  tsym.textContent=shown?SUIT_SYM[shown]+(st.trump?'':'?'):'–';
+  tsym.style.color=shown&&SUIT_RED[shown]?'#ff7b7b':'#eaf3ec';
 
   renderSeats();
   renderTrick();
@@ -490,6 +498,7 @@ function renderHand(){
 function statusLine(){
   if(!st) return '';
   if(st.phase==='lobby') return 'Waiting in the lobby…';
+  if(st.phase==='choosing'&&st.bid) return st.needBid?`${SUIT_SYM[st.bid.suit]} drawn — play or pass?`:`${SUIT_SYM[st.bid.suit]} drawn — ${nmeat(st.bid.turn)} to play or pass…`;
   if(st.phase==='choosing') return st.mySeat===st.chooser?'Choose a trump suit…':`Waiting for ${nmeat(st.chooser)} to choose trump…`;
   if(st.phase==='playing'){
     if(st.resolving) return 'Trick complete…';
@@ -525,11 +534,13 @@ let openOverlays={};
 function handleModals(){
   // clear game modals not relevant
   if(st.phase!=='choosing') closeModal('trump');
+  if(!st.needBid) closeModal('bid');
   if(st.phase!=='scored'&&st.phase!=='matchover') closeModal('deal');
   if(st.phase!=='matchover') statsRecorded=false;   // arm stats recording for the next match
 
   if(st.phase==='lobby') renderLobbyModal(); else closeModal('lobby');
   if(st.phase==='choosing'&&st.needTrump) renderTrumpModal();
+  if(st.needBid) renderBidModal();
   if(st.phase==='scored'||st.phase==='matchover') renderDealModal();
 }
 function renderLobbyModal(){
@@ -554,11 +565,13 @@ function renderLobbyModal(){
       ['easy','normal','hard','family'].map(l=>`<button class="diffbtn ${st.botLevel===l?'on':''}" data-l="${l}" ${iAmHost?'':'disabled'}>${l[0].toUpperCase()+l.slice(1)}</button>`).join('')
     }</div></div>
     <div class="diffrow"><span class="difflbl">Roem in hand</span><div class="diffbtns" id="lRoem">${onOffBtns(!!st.handRoem,!iAmHost)}</div></div>
+    <div class="diffrow"><span class="difflbl">Trump</span><div class="diffbtns" id="lMode">${modeBtns(st.trumpMode||'choose',!iAmHost)}</div></div>
     <p style="margin:6px 0 12px">${iAmHost?'Empty seats become bots when you start.':'Waiting for the host to start…'}</p>
     ${iAmHost?'<button class="btn wide" id="startBtn">Start match ▶</button>':''}
   `;
   ov.querySelectorAll('.lseat').forEach(el=>el.onclick=()=>{ const seat=+el.dataset.seat; if(seat!==st.mySeat) net.emit('claimSeat',{seat}); });
   ov.querySelectorAll('.diffbtn[data-l]').forEach(b=>b.onclick=()=>{ if(iAmHost) net.emit('setDifficulty',{level:b.dataset.l}); });
+  ov.querySelectorAll('#lMode .diffbtn').forEach(b=>b.onclick=()=>{ if(iAmHost){ myTrumpMode=b.dataset.m; localStorage.setItem('kj_trumpmode',myTrumpMode); net.emit('setTrumpMode',{mode:myTrumpMode}); } });
   ov.querySelectorAll('#lRoem .diffbtn').forEach(b=>b.onclick=()=>{ if(iAmHost){ myHandRoem=b.dataset.r==='on'; localStorage.setItem('kj_handroem',myHandRoem?'1':'0'); net.emit('setHandRoem',{on:myHandRoem}); } });
   ov.querySelector('#copyLink').onclick=()=>{ const code=st.code; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(()=>toast('Code '+code+' copied — share it!'),()=>toast('Share code: '+code)); } else toast('Share code: '+code); };
   const sb=ov.querySelector('#startBtn'); if(sb) sb.onclick=()=>net.emit('start');
@@ -570,6 +583,19 @@ function renderTrumpModal(){
     <p>You sit left of the dealer, so you name trump — your team must then score <b>more than</b> the opponents, or go <b>nat</b>. Check the cheat sheet (bottom-left).</p>
     <div class="suitbtns">${SUITS.map(s=>`<button class="suitbtn ${SUIT_RED[s]?'red':'black'}" data-s="${s}">${SUIT_SYM[s]}</button>`).join('')}</div>`);
   ov.querySelectorAll('.suitbtn').forEach(b=>b.onclick=()=>{ net.emit('chooseTrump',{suit:b.dataset.s}); closeModal('trump'); });
+}
+function renderBidModal(){
+  if(openOverlays['bid']) return;
+  setCheat(true,false);
+  const su=st.bid.suit, first=st.chooser===st.mySeat;
+  const ov=modal('bid',`<h2>Trump drawn</h2>
+    <div class="suitbtns"><div class="suitbtn ${SUIT_RED[su]?'red':'black'}" style="cursor:default">${SUIT_SYM[su]}</div></div>
+    <p>Play on ${SUIT_SYM[su]} and your team must score <b>more than</b> the opponents, or go <b>nat</b>.
+      ${first?'You lead the first card either way.':`${escapeHtml(nmeat(st.chooser))} still leads the first card.`}
+      ${first?'If everyone passes, a new suit is drawn and <b>you</b> must play it.':''}</p>
+    <div class="row2"><button class="btn" id="bidPlay">Play ${SUIT_SYM[su]}</button><button class="btn sec" id="bidPass">Pass</button></div>`);
+  ov.querySelector('#bidPlay').onclick=()=>{ net.emit('bid',{take:true}); closeModal('bid'); };
+  ov.querySelector('#bidPass').onclick=()=>{ net.emit('bid',{take:false}); closeModal('bid'); };
 }
 /* ---------- solo stats (persisted per browser; solo mode only) ---------- */
 const STATS_KEY='kj_stats';
@@ -709,6 +735,7 @@ document.getElementById('rulesbtn').onclick=()=>{
     152 + 10 last trick = <b>162</b> per deal.
     <h3>Roem</h3>run3 20 · run4 50 · <b>stuk</b> (trump K+Q) 20 · run incl. trump K-Q 40/70. To the team winning the trick.
     <br><b>Roem in hand</b> (host option): runs in your own hand (3 = 20, 4 = 50, 5+ = 100) and stuk score for your team — but only if you <b>call</b> it before playing your first card.
+    <h3>Trump</h3><b>Choose</b> (default): the player left of the dealer names trump. <b>Draw</b> (host option): a random suit is drawn and offered round the table, starting with the player left of the dealer; each may <b>play</b> on it (their team must then win, or go nat) or <b>pass</b>. If all four pass, a different suit is drawn and the first player must play it. The first player always leads the first card.
     <h3>Winning</h3>The declaring team must score <b>more than</b> the opponents (points + roem), else they go <b>nat</b> and the opponents take all 162 + all roem. All 8 tricks = <b>pit</b> (+100).
     <h3>Match</h3>16 deals; highest total wins.
     </div><br><button class="btn sec" id="closeRules">Close</button></div>`);

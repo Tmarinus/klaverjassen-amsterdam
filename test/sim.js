@@ -121,6 +121,8 @@ function check(name, ok, detail) {
     ['opponent trumped, can overtrump', hand, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('clubs', '7') }, { seat: 2, card: C('hearts', '8') }], [hand[1]]],
     // nothing but (lower) trumps: undertrumping is then forced
     ['only lower trumps left', onlyTrumps, [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('clubs', '7') }, { seat: 2, card: C('hearts', 'K') }], onlyTrumps],
+    // partner trumped with the K, I hold only trumps (Q and A): no need to overtrump partner, either is fine
+    ['partner trumped, only trumps', [C('hearts', 'Q'), C('hearts', 'A')], [{ seat: 0, card: C('clubs', '8') }, { seat: 1, card: C('hearts', 'K') }, { seat: 2, card: C('clubs', '7') }], [C('hearts', 'Q'), C('hearts', 'A')]],
     // trump led, can't go higher: must still follow trump
     ['trump led, cannot go higher', hand, [{ seat: 0, card: C('hearts', 'J') }, { seat: 1, card: C('hearts', '8') }, { seat: 2, card: C('hearts', '9') }], onlyTrumps],
   ];
@@ -154,6 +156,8 @@ function check(name, ok, detail) {
   if (!room.viewFor(seat).myRoem.canCall) bad.push('canCall false before first card');
   room.handle('me', 'callRoem'); room.handle('me', 'callRoem');
   if (g.dealRoem[tm] - before !== 20) bad.push(`call scored ${g.dealRoem[tm] - before}, want 20 once`);
+  const callLog = room.log.map(e => e.html).find(h => /calls roem/.test(h)) || '';
+  if (!/run of 3 \+20/.test(callLog) || /[♣♦♥♠]/.test(callLog)) bad.push(`announcement reveals suit or is wrong: "${callLog}"`);
   const room2 = new R.GameRoom('U', { handRoem: true, timings: room.timings });
   room2.addHuman('me', 'Me'); room2.startGame(); room2.clearTimers();
   room2.g.hands[0] = g.hands[0].slice(); room2.g.chooser = room2.g.turn = room2.g.leader = 0;
@@ -199,7 +203,47 @@ function check(name, ok, detail) {
     if (JSON.stringify(ex).includes(snap.tokens[0][1])) bad.push('export leaks seat token');
   } catch (e) { bad.push(e.message); }
   check('resume from snapshot + debug export', bad.length === 0, bad.length ? bad.join('; ') : '4-deal match resumed mid-trick, 162/deal, 0 illegal');
-})().then(strength);
+})().then(drawTrumpMode).then(strength);
+
+/* ---- draw-trump mode: play/pass round, forced redraw, first player still leads ---- */
+async function drawTrumpMode() {
+  const R = require(path.join(__dirname, '..', 'game-room.js'));
+  const slow = { botThink: 1e9, trumpThink: 1e9, trickLinger: 1e9, dealAuto: 1e9 };
+  const bad = [];
+  const fresh = () => {
+    const r = new R.GameRoom('D', { trumpMode: 'draw', timings: slow });
+    ['a', 'b', 'c', 'd'].forEach(id => r.addHuman(id, id));
+    r.startGame(); r.clearTimers(); return r;
+  };
+  const pid = (r, seat) => r.seats[seat].playerId;
+  // everyone passes -> a different suit, first player declares and leads
+  let r = fresh(); const first = r.g.chooser, s1 = r.g.bid.suit;
+  if (r.g.bid.turn !== first) bad.push('bidding did not start with the first player');
+  r.handle(pid(r, (first + 1) % 4), 'bid', { take: true });                     // out of turn: ignored
+  if (r.phase !== 'choosing') bad.push('out-of-turn bid accepted');
+  for (let k = 0; k < 4; k++) r.handle(pid(r, (first + k) % 4), 'bid', { take: false });
+  r.clearTimers();
+  if (r.phase !== 'playing' || r.g.declarer !== first || r.g.trump === s1 || r.g.turn !== first)
+    bad.push(`all-pass: phase ${r.phase}, declarer ${r.g.declarer}, trump ${r.g.trump} (passed ${s1}), turn ${r.g.turn}`);
+  // third player takes -> their team declares, the first player still leads
+  r = fresh(); const f2 = r.g.chooser, s2 = r.g.bid.suit;
+  r.handle(pid(r, f2), 'bid', { take: false }); r.handle(pid(r, (f2 + 1) % 4), 'bid', { take: false });
+  r.handle(pid(r, (f2 + 2) % 4), 'bid', { take: true }); r.clearTimers();
+  if (r.g.declarer !== (f2 + 2) % 4 || r.g.trump !== s2 || r.g.turn !== f2) bad.push(`take: declarer ${r.g.declarer}, trump ${r.g.trump}, turn ${r.g.turn}`);
+  if (r.handle(pid(r, f2), 'chooseTrump', { suit: 'clubs' }), r.g.trump !== s2) bad.push('chooseTrump worked in draw mode');
+  // full bot matches in draw mode: scoring follows the declarer, not the leader
+  const fast = { botThink: 0, trumpThink: 0, trickLinger: 0, dealAuto: 0 };
+  for (const level of ['easy', 'hard']) {
+    const m = new R.GameRoom('M', { trumpMode: 'draw', botLevel: level, matchDeals: 8, timings: fast });
+    m.startGame();
+    await new Promise((res, rej) => { const t0 = Date.now(); (function poll() { if (m.phase === 'matchover') return res(); if (Date.now() - t0 > 60000) return rej(new Error('draw match timeout')); setTimeout(poll, 1); })(); });
+    for (const d of m.history) {
+      if (d.plays[0].seat !== d.chooser) bad.push(`${level} deal ${d.deal}: first lead by ${d.plays[0].seat}, not ${d.chooser}`);
+      if (d.result.play !== E.teamOf(d.declarer)) bad.push(`${level} deal ${d.deal}: scored for team ${d.result.play}, declarer ${d.declarer}`);
+    }
+  }
+  check('draw-trump mode (pass round, redraw, leader vs declarer)', bad.length === 0, bad.length ? bad.join('; ') : 'all-pass, take, 2 bot matches');
+}
 
 function strength() {
 /* ---- 3: strength ordering easy < normal < hard < family (match level) ---- */
@@ -230,7 +274,7 @@ function matchDuel(strong, weak, matches) {
 // marginal pair, gets the most matches; family pairs get fewer as family is costly).
 const PAIRS = [
   ['normal', 'easy',   Math.round(250  * SCALE), 0.55],
-  ['hard',   'normal', Math.round(1200 * SCALE), 0.505],
+  ['hard',   'normal', Math.round(2400 * SCALE), 0.505],   // true rate ~53% under Amsterdam rules: needs the big sample
   ['family', 'hard',   Math.round(120  * SCALE), 0.62],
 ];
 for (const [strong, weak, matches, thr] of PAIRS) {

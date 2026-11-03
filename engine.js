@@ -84,10 +84,8 @@ function legalMoves(hand, trick, trump) {
   const higher = myTrumps.filter(c => TRUMP_STR[c.rank] > highTrump);
   const others = hand.filter(c => c.suit !== trump);
   const partner = (trick[0].seat + trick.length + 2) % 4;   // seat to play is leader + trick.length
-  if (trickWinnerSeat(trick, trump) === partner) {           // partner winning: free, but no undertrumping
-    const ok = others.concat(higher);
-    return ok.length ? ok : hand.slice();
-  }
+  if (trickWinnerSeat(trick, trump) === partner)             // partner winning: free, but no undertrumping
+    return others.length ? others.concat(higher) : hand.slice();   // (all trumps: any of them, partner needn't be overtrumped)
   if (trumpsInTrick.length === 0) return myTrumps;           // must trump in
   if (higher.length) return higher;                          // must overtrump
   return others.length ? others : hand.slice();              // can't overtrump: another suit, never undertrump
@@ -112,9 +110,10 @@ function computeRoem(cards, trump) {
 /* Roem held in a hand (optional "roem in hand" variant): every run of 3+ in a
    suit (3 = 20, 4 = 50, 5+ = 100) plus stuk (trump K+Q = 20). Called before the
    holder's first card; never overlaps trick roem, since one player's cards never
-   share a trick. */
+   share a trick. `labels` name the suits (for the holder / debug log); `announce`
+   is what the table hears: runs without their suit, stuk by name. */
 function handRoem(cards, trump) {
-  let roem = 0; const labels = [];
+  let roem = 0; const labels = [], announce = [];
   const SYM = { clubs: '♣', diamonds: '♦', hearts: '♥', spades: '♠' };
   for (const s of SUITS) {
     const idx = cards.filter(c => c.suit === s).map(c => SEQ.indexOf(c.rank)).sort((a, b) => a - b);
@@ -124,15 +123,15 @@ function handRoem(cards, trump) {
       const len = i - start;
       if (len >= 3) {
         const pts = len >= 5 ? 100 : len === 4 ? 50 : 20;
-        roem += pts; labels.push(`${SYM[s]} run of ${len} +${pts}`);
+        roem += pts; labels.push(`${SYM[s]} run of ${len} +${pts}`); announce.push(`run of ${len} +${pts}`);
       }
       start = i;
     }
   }
   if (trump && cards.some(c => c.suit === trump && c.rank === 'K') && cards.some(c => c.suit === trump && c.rank === 'Q')) {
-    roem += 20; labels.push('stuk (trump K-Q) +20');
+    roem += 20; labels.push('stuk (trump K-Q) +20'); announce.push('stuk (trump K-Q) +20');
   }
-  return { roem, labels };
+  return { roem, labels, announce };
 }
 
 /* ============================================================
@@ -162,22 +161,36 @@ function botChooseTrump(hand, level = 'normal') {
     for (const s of SUITS) { const n = hand.filter(c => c.suit === s).length; if (n > bc) { bc = n; best = s; } }
     return best;
   }
-  const strong = level === 'hard' || level === 'family';   // card-counting tiers share the sharper heuristic
   let best = SUITS[0], bs = -Infinity;
   for (const s of SUITS) {
-    let sc = 0;
-    for (const c of hand) sc += c.suit === s ? TRUMP_VAL[c.rank] + 6 : PLAIN_VAL[c.rank] * 0.3;
-    if (hand.some(c => c.suit === s && c.rank === 'J')) sc += strong ? 22 : 15;
-    if (hand.some(c => c.suit === s && c.rank === '9')) sc += strong ? 12 : 8;
-    const n = hand.filter(c => c.suit === s).length;
-    sc += strong ? n * n * 1.5 : n * n;
-    if (strong) {                                    // value guaranteed side-suit winners (aces)
-      sc += hand.filter(c => c.suit !== s && c.rank === 'A').length * 4;
-      if (n < 3) sc -= 6;                            // avoid naming a short trump suit
-    }
+    const sc = trumpScore(hand, s, level);
     if (sc > bs) { bs = sc; best = s; }
   }
   return best;
+}
+// How good `suit` would be as trump for this hand (higher = stronger).
+function trumpScore(hand, s, level = 'normal') {
+  const strong = level === 'hard' || level === 'family';   // card-counting tiers share the sharper heuristic
+  let sc = 0;
+  for (const c of hand) sc += c.suit === s ? TRUMP_VAL[c.rank] + 6 : PLAIN_VAL[c.rank] * 0.3;
+  if (hand.some(c => c.suit === s && c.rank === 'J')) sc += strong ? 22 : 15;
+  if (hand.some(c => c.suit === s && c.rank === '9')) sc += strong ? 12 : 8;
+  const n = hand.filter(c => c.suit === s).length;
+  sc += strong ? n * n * 1.5 : n * n;
+  if (strong) {                                    // value guaranteed side-suit winners (aces)
+    sc += hand.filter(c => c.suit !== s && c.rank === 'A').length * 4;
+    if (n < 3) sc -= 6;                            // avoid naming a short trump suit
+  }
+  return sc;
+}
+// "Draw" trump mode: play on the drawn suit (true) or pass. Thresholds are
+// set where declaring a suit of that score breaks even in bot self-play
+// (normal ~70: 74% made; hard ~80: 72% made).
+const TAKE_AT = { easy: null, normal: 68, hard: 80, family: 80 };   // ~break-even: avg net result of declaring >= 0
+function botTakeTrump(hand, suit, level = 'normal') {
+  const n = hand.filter(c => c.suit === suit).length;
+  if (level === 'easy') return n >= 4 || (n >= 3 && hand.some(c => c.suit === suit && c.rank === 'J'));
+  return trumpScore(hand, suit, level) >= TAKE_AT[level];
 }
 
 // unseen = cards not in my hand and not yet played (i.e. in the other three hands)
@@ -203,7 +216,8 @@ function chooseBotCard(seat, hand, trick, trump, opts = {}) {
   if (!legal.length) return null;                    // empty hand (stale call) — caller must guard
   const level = opts.level || 'normal';
   if (level === 'easy') return legal[Math.floor(Math.random() * legal.length)];
-  if (level === 'family') return familyPlay(seat, hand, trick, trump, legal, opts.played || [], opts.chooser, opts.samples, opts.calledRoem);
+  // opts.chooser = the declaring player; opts.leader = who led trick 1 (differs in draw-trump mode)
+  if (level === 'family') return familyPlay(seat, hand, trick, trump, legal, opts.played || [], opts.chooser, opts.samples, opts.calledRoem, opts.leader);
   if (level === 'hard') return hardPlay(seat, hand, trick, trump, legal, opts.played || [], opts.chooser);
   return normalPlay(seat, trick, trump, legal);
 }
@@ -278,11 +292,11 @@ function hardPlay(seat, hand, trick, trump, legal, played, chooser) {
 const DEFAULT_SAMPLES = 60;
 
 // Replay `played` (in play order) trick-by-trick to recover hidden info.
-function reconstructDeal(played, trump, chooser) {
+function reconstructDeal(played, trump, firstLeader) {
   const playedBySeat = [[], [], [], []];
   const voids = [new Set(), new Set(), new Set(), new Set()];
   const card = [0, 0], roem = [0, 0], won = [0, 0];
-  let leader = chooser, completed = 0, i = 0;
+  let leader = firstLeader, completed = 0, i = 0;
   while (i < played.length) {
     const group = played.slice(i, i + 4);
     const led = group[0].suit;
@@ -417,10 +431,10 @@ function awardDiff(acc, play, myTeam) {
 }
 
 // calledRoem: [team0, team1] hand roem already called this deal (not visible in `played`).
-function familyPlay(seat, hand, trick, trump, legal, played, chooser, samples, calledRoem) {
+function familyPlay(seat, hand, trick, trump, legal, played, chooser, samples, calledRoem, leader) {
   if (legal.length === 1) return legal[0];
   const N = samples || DEFAULT_SAMPLES;
-  const rec = reconstructDeal(played, trump, chooser);
+  const rec = reconstructDeal(played, trump, leader != null ? leader : chooser);
   const others = [0, 1, 2, 3].filter(s => s !== seat);
   const need = {};
   others.forEach(s => { need[s] = 8 - rec.playedBySeat[s].length; });
@@ -459,7 +473,7 @@ const API = {
   SUITS, RANKS, SEQ, TRUMP_VAL, PLAIN_VAL, TRUMP_STR, PLAIN_STR,
   teamOf, cardId, cardVal, freshDeck, handComparator,
   winnerIndex, trickWinnerSeat, legalMoves, computeRoem, handRoem,
-  botChooseTrump, chooseBotCard,
+  botChooseTrump, trumpScore, botTakeTrump, chooseBotCard,
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = API;   // Node / server.js

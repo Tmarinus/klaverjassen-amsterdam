@@ -67,7 +67,14 @@ Declaring team must score more than the opponents (points + roem) or go *nat*. R
 
 **Roem in hand** (optional, chosen by the host on the start screen or in the lobby): runs in your
 own hand (3 = 20, 4 = 50, 5+ = 100) and stuk also score for your team, but only if you **call**
-them (the *📣 Call roem* button) before you play your first card of the deal. Bots always call.
+them (the *📣 Call roem* button) before you play your first card of the deal. Bots always call. The table hears only
+what you have, not the suit ("run of 3 +20"); stuk is named.
+
+**Trump: Choose or Draw** (host option). *Choose*: the player left of the dealer names trump.
+*Draw*: a random suit is drawn and offered round the table, starting with the player left of
+the dealer; each may **play** on it (their team must then win, or go nat) or **pass**. If all four
+pass, a different suit is drawn and the first player must play it. Either way the player left of
+the dealer leads the first card.
 
 16 deals; highest cumulative total wins. Full
 reference is in the in-game **Rules** panel.

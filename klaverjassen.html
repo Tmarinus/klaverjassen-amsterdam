@@ -348,7 +348,7 @@ function legalMoves(hand,trick,trump){
   const higher=myTrumps.filter(c=>TRUMP_STR[c.rank]>highTrump);
   const others=hand.filter(c=>c.suit!==trump);
   if(trickWinnerSeat(trick,trump)===(trick[0].seat+trick.length+2)%4){   // partner winning -> free, no undertrump
-    const ok=others.concat(higher); return ok.length?ok:hand.slice();
+    return others.length?others.concat(higher):hand.slice();   // all trumps: any of them
   }
   if(trumpsInTrick.length===0) return myTrumps;   // nobody trumped yet -> must trump
   if(higher.length) return higher;                // must overtrump if able

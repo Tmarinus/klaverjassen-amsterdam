@@ -46,6 +46,7 @@ class GameRoom {
     this.advanced = false;
     this.botLevel = opts.botLevel || 'normal';     // easy | normal | hard | family
     this.handRoem = !!opts.handRoem;               // host option: roem in hand may be called
+    this.trumpMode = opts.trumpMode === 'draw' ? 'draw' : 'choose';   // host option: how trump is set
     this.spectators = new Map();                   // playerId -> { name }
     this.tokens = new Map();                        // playerId -> seat reconnection token
     this.g = null;                                 // game state
@@ -124,10 +125,11 @@ class GameRoom {
     // Random starting dealer each match, so the host (seat 0) isn't always first to choose trump.
     this.g = { deal: 0, cumulative: [0, 0], firstDealer: Math.floor(Math.random() * 4) };
     this.match = (this.match || 0) + 1;
-    this.note('matchStart', { match: this.match, botLevel: this.botLevel, handRoem: this.handRoem, seats: this.seats.map(s => ({ name: s.name, isBot: s.isBot })) });
+    this.note('matchStart', { match: this.match, botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode, seats: this.seats.map(s => ({ name: s.name, isBot: s.isBot })) });
     this.log = [];
     this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: <b>${this.botLevel}</b>.` +
-      (this.handRoem ? ' Roem in hand: <b>on</b> (call it before your first card).' : ''));
+      (this.handRoem ? ' Roem in hand: <b>on</b> (call it before your first card).' : '') +
+      (this.trumpMode === 'draw' ? ' Trump is <b>drawn</b>: play on it or pass.' : ''));
     this.newDeal();
   }
 
@@ -142,7 +144,7 @@ class GameRoom {
     for (let i = 0; i < 32; i++) hands[i % 4].push(deck[i]);
     hands.forEach(h => h.sort(E.handComparator(null)));
     Object.assign(g, {
-      dealer, chooser, hands, trump: null,
+      dealer, chooser, declarer: chooser, bid: null, hands, trump: null,
       trick: [], leader: chooser, turn: chooser, trickNo: 0, resolving: false,
       dealCard: [0, 0], dealRoem: [0, 0], tricksWon: [0, 0], played: [],
       roemCalled: [false, false, false, false], calledRoem: [0, 0],
@@ -151,11 +153,59 @@ class GameRoom {
     this.history.push({
       match: this.match, deal: g.deal, dealer, chooser, trump: null,
       hands: hands.map(h => h.map(E.cardId)), plays: [], roemCalls: [], tricks: [], result: null,
+      trumpMode: this.trumpMode, bids: [], declarer: null,
     });
     this.phase = 'choosing';
+    if (this.trumpMode === 'draw') {
+      this.addLog('deal', `— Deal ${g.deal} — ${this.name(dealer)} deals. ${this.name(chooser)} leads.`);
+      this.drawTrump(false);
+      return;
+    }
     this.addLog('deal', `— Deal ${g.deal} — ${this.name(dealer)} deals. ${this.name(chooser)} chooses trump.`);
     this.broadcast();
     if (this.isAuto(chooser)) this.scheduleBotTrump(chooser);
+  }
+
+  /* --- draw-trump mode: a random suit goes round the table from the first player;
+         each plays on it or passes. If all four pass, a different suit is drawn and
+         the first player must play it. The first player leads trick 1 either way. --- */
+  drawTrump(forced) {
+    const g = this.g;
+    const prev = g.bid ? g.bid.drawn : [];
+    const pool = E.SUITS.filter(s => !prev.includes(s));
+    const suit = pool[Math.floor(Math.random() * pool.length)];
+    g.bid = { suit, turn: g.chooser, passes: 0, forced, drawn: prev.concat([suit]) };
+    if (forced) {
+      this.addLog('deal', `Everyone passed. ${sym(suit)} is drawn — ${this.name(g.chooser)} must play it.`);
+      this.takeTrump(g.chooser);
+      return;
+    }
+    this.addLog('deal', `Trump drawn: ${sym(suit)}. ${this.name(g.chooser)} first — play or pass.`);
+    this.broadcast();
+    this.scheduleBotTrump(g.chooser);
+  }
+  bid(seat, take) {
+    const g = this.g, b = g && g.bid;
+    if (this.phase !== 'choosing' || this.trumpMode !== 'draw' || !b || b.forced || seat !== b.turn) return;
+    this.curDeal().bids.push({ seat, suit: b.suit, take: !!take, auto: this.isAuto(seat) });
+    if (take) { this.takeTrump(seat); return; }
+    this.addLog('', `${this.name(seat)} passes on ${sym(b.suit)}.`);
+    if (++b.passes === 4) { this.drawTrump(true); return; }
+    b.turn = (b.turn + 1) % 4;
+    this.broadcast();
+    this.scheduleBotTrump(b.turn);
+  }
+  takeTrump(seat) {
+    const g = this.g;
+    g.declarer = seat;
+    this.setTrump(g.bid.suit, `${this.name(seat)} plays ${sym(g.bid.suit)} — ${TEAM[E.teamOf(seat)]} must win or go nat.` +
+      (seat !== g.chooser ? ` ${this.name(g.chooser)} still leads.` : ''));
+  }
+  // Re-arm an automatic decision for `seat` if it's that seat's move (bot, or a
+  // player who dropped). Safe to call any time.
+  wake(seat) {
+    if (this.phase === 'playing' && this.g.turn === seat) this.nextTurn();
+    else if (this.phase === 'choosing') this.scheduleBotTrump(seat);
   }
 
   isAuto(seat) { const s = this.seats[seat]; return !s || s.isBot || !s.connected; }
@@ -163,20 +213,25 @@ class GameRoom {
 
   // deferred bot trump choice — re-checks state when the timer fires (handles reconnection & stale timers)
   scheduleBotTrump(seat) {
+    if (!this.isAuto(seat)) return;
     this.after(this.timings.trumpThink, () => {
-      if (this.phase === 'choosing' && this.g.chooser === seat && this.isAuto(seat))
-        this.setTrump(E.botChooseTrump(this.g.hands[seat], this.botLevel));
+      if (this.phase !== 'choosing' || !this.isAuto(seat)) return;
+      const g = this.g;
+      if (this.trumpMode === 'draw') {
+        if (g.bid && !g.bid.forced && g.bid.turn === seat) this.bid(seat, E.botTakeTrump(g.hands[seat], g.bid.suit, this.botLevel));
+      } else if (g.chooser === seat) this.setTrump(E.botChooseTrump(g.hands[seat], this.botLevel));
     });
   }
 
-  setTrump(suit) {
+  setTrump(suit, msg) {
     if (this.phase !== 'choosing' || !E.SUITS.includes(suit)) return;
     const g = this.g;
     g.trump = suit;
     this.curDeal().trump = suit;
+    this.curDeal().declarer = g.declarer;
     g.hands.forEach(h => h.sort(E.handComparator(suit)));
     this.phase = 'playing';
-    this.addLog('deal', `Trump is ${sym(suit)} — chosen by ${this.name(g.chooser)}.`);
+    this.addLog('deal', msg || `Trump is ${sym(suit)} — chosen by ${this.name(g.chooser)}.`);
     this.broadcast();
     this.nextTurn();
   }
@@ -190,7 +245,7 @@ class GameRoom {
       if (this.phase !== 'playing' || this.g.turn !== seat || !this.isAuto(seat)) return;
       if (!this.g.hands[seat].length) return;
       if (this.canCallRoem(seat)) this.callRoem(seat);   // bots always call their hand roem
-      const card = E.chooseBotCard(seat, this.g.hands[seat], this.g.trick, this.g.trump, { level: this.botLevel, played: this.g.played, chooser: this.g.chooser, calledRoem: this.g.calledRoem });
+      const card = E.chooseBotCard(seat, this.g.hands[seat], this.g.trick, this.g.trump, { level: this.botLevel, played: this.g.played, chooser: this.g.declarer, leader: this.g.chooser, calledRoem: this.g.calledRoem });
       if (card) this.doPlay(seat, card);
     });
   }
@@ -204,11 +259,11 @@ class GameRoom {
   }
   callRoem(seat) {
     if (!this.canCallRoem(seat)) return;
-    const g = this.g, tm = E.teamOf(seat), { roem, labels } = E.handRoem(g.hands[seat], g.trump);
+    const g = this.g, tm = E.teamOf(seat), { roem, labels, announce } = E.handRoem(g.hands[seat], g.trump);
     g.roemCalled[seat] = true;
-    this.curDeal().roemCalls.push({ seat, roem, labels, auto: this.isAuto(seat) });
+    this.curDeal().roemCalls.push({ seat, roem, labels, auto: this.isAuto(seat), t: Date.now(), afterPlays: this.curDeal().plays.length });
     g.dealRoem[tm] += roem; g.calledRoem[tm] += roem;
-    this.addLog('roem', `${this.name(seat)} calls roem +${roem}: ${labels.join(', ')}.`);
+    this.addLog('roem', `${this.name(seat)} calls roem +${roem}: ${announce.join(', ')}.`);   // suits stay hidden
     this.broadcast();
   }
 
@@ -276,7 +331,7 @@ class GameRoom {
 
   scoreDeal() {
     const g = this.g;
-    const play = E.teamOf(g.chooser), opp = 1 - play;
+    const play = E.teamOf(g.declarer), opp = 1 - play;
     const pitPlay = g.tricksWon[play] === 8, pitOpp = g.tricksWon[opp] === 8;
     let playPts = g.dealCard[play] + g.dealRoem[play] + (pitPlay ? 100 : 0);
     let oppPts = g.dealCard[opp] + g.dealRoem[opp] + (pitOpp ? 100 : 0);
@@ -294,7 +349,7 @@ class GameRoom {
       `Deal ${g.deal}: ${TEAM[play]} ${playPts} vs ${TEAM[opp]} ${oppPts}. ${madeTxt}` + ((pitPlay || pitOpp) ? ' <b>PIT +100</b>!' : ''));
     g.lastResult = {
       deal: g.deal, play, opp, playPts, oppPts, nat, pitPlay, pitOpp, awarded, totalRoem,
-      trump: g.trump, chooser: g.chooser, cumulative: g.cumulative.slice(),
+      trump: g.trump, chooser: g.declarer, cumulative: g.cumulative.slice(),
     };
     this.curDeal().result = Object.assign({ dealCard: g.dealCard.slice(), dealRoem: g.dealRoem.slice(), tricksWon: g.tricksWon.slice() }, g.lastResult);
     this.phase = g.deal >= this.matchDeals ? 'matchover' : 'scored';
@@ -338,7 +393,13 @@ class GameRoom {
         if (this.claimSeat(playerId, data.seat)) this.broadcast();
         break;
       case 'chooseTrump':
-        if (this.phase === 'choosing' && this.seatOf(playerId) === this.g.chooser) this.setTrump(data.suit);
+        if (this.phase === 'choosing' && this.trumpMode === 'choose' && this.seatOf(playerId) === this.g.chooser) this.setTrump(data.suit);
+        break;
+      case 'bid':
+        this.bid(this.seatOf(playerId), !!data.take);
+        break;
+      case 'setTrumpMode':
+        if (this.hostId === playerId && this.phase === 'lobby' && ['choose', 'draw'].includes(data.mode)) { this.trumpMode = data.mode; this.broadcast(); }
         break;
       case 'play': {
         const err = this.play(playerId, data.cardId);
@@ -370,7 +431,7 @@ class GameRoom {
   snapshot() {
     return {
       v: 1, savedAt: Date.now(), code: this.code, phase: this.phase, hostId: this.hostId,
-      seats: this.seats, tokens: [...this.tokens], botLevel: this.botLevel, handRoem: this.handRoem,
+      seats: this.seats, tokens: [...this.tokens], botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode,
       matchDeals: this.matchDeals, match: this.match, advanced: this.advanced,
       log: this.log, g: this.g, history: this.history, events: this.events,
     };
@@ -378,7 +439,7 @@ class GameRoom {
   restore(snap) {
     Object.assign(this, {
       code: snap.code, phase: snap.phase, hostId: snap.hostId, seats: snap.seats,
-      tokens: new Map(snap.tokens), botLevel: snap.botLevel, handRoem: !!snap.handRoem,
+      tokens: new Map(snap.tokens), botLevel: snap.botLevel, handRoem: !!snap.handRoem, trumpMode: snap.trumpMode || 'choose',
       matchDeals: snap.matchDeals, match: snap.match, advanced: snap.advanced,
       log: snap.log || [], g: snap.g, history: snap.history || [], events: snap.events || [],
     });
@@ -396,7 +457,7 @@ class GameRoom {
       else if (g.resolving) this.after(this.timings.trickLinger, () => this.resolveTrick());
       else this.nextTurn();
     } else if (this.phase === 'choosing') {
-      if (this.isAuto(g.chooser)) this.scheduleBotTrump(g.chooser);
+      this.scheduleBotTrump(this.trumpMode === 'draw' && g.bid ? g.bid.turn : g.chooser);
     } else if (this.phase === 'scored') {
       this.after(this.timings.dealAuto, () => this.advance());
     }
@@ -411,7 +472,9 @@ class GameRoom {
     const P = s => SEAT_LABEL[s][0];
     const readable = [];
     for (const d of this.history) {
-      readable.push(`Match ${d.match} · Deal ${d.deal}: dealer ${P(d.dealer)}, ${P(d.chooser)} chose ${d.trump ? SYM[d.trump] : '(none yet)'}`);
+      readable.push(`Match ${d.match} · Deal ${d.deal}: dealer ${P(d.dealer)}, ${P(d.chooser)} leads, ` +
+        (d.trumpMode === 'draw' ? `bids ${(d.bids || []).map(b => P(b.seat) + (b.take ? ' plays ' : ' passes ') + SYM[b.suit]).join(', ') || '-'}, ` : '') +
+        `${d.declarer != null ? P(d.declarer) : P(d.chooser)} declared ${d.trump ? SYM[d.trump] : '(none yet)'}`);
       d.hands.forEach((h, s) => readable.push(`  ${P(s)} hand: ${h.map(S).join(' ')}`));
       d.roemCalls.forEach(r => readable.push(`  ${P(r.seat)} calls roem +${r.roem} (${r.labels.join(', ')})`));
       for (let n = 1; n <= 8; n++) {
@@ -425,7 +488,7 @@ class GameRoom {
     return Object.assign({
       format: 'klaverjassen-debug/1', exportedAt: new Date().toISOString(),
       note: 'Seats: 0 South, 1 West, 2 North, 3 East. "*" in readable = played by a human; legal = cards allowed at that moment.',
-      code: this.code, phase: this.phase, botLevel: this.botLevel, handRoem: this.handRoem,
+      code: this.code, phase: this.phase, botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode,
       seats: this.seats.map((s, i) => s && { seat: i, label: SEAT_LABEL[i], name: s.name, isBot: s.isBot, connected: s.connected }),
       events: this.events, history: this.history, readable,
     }, meta || {});
@@ -450,6 +513,7 @@ class GameRoom {
       canStart: this.phase === 'lobby',
       botLevel: this.botLevel,
       handRoem: this.handRoem,
+      trumpMode: this.trumpMode,
     };
     if (mySeat >= 0 && this.seats[mySeat]) base.token = this.tokens.get(this.seats[mySeat].playerId);
     if (!g) return base;
@@ -464,7 +528,10 @@ class GameRoom {
       trick: g.trick.map(t => ({ seat: t.seat, card: { suit: t.card.suit, rank: t.card.rank, id: E.cardId(t.card) } })),
       cumulative: g.cumulative,
       hand: mine, legal,
-      needTrump: this.phase === 'choosing' && mySeat === g.chooser,
+      needTrump: this.phase === 'choosing' && this.trumpMode === 'choose' && mySeat === g.chooser,
+      declarer: g.declarer,
+      bid: g.bid && this.phase === 'choosing' ? { suit: g.bid.suit, turn: g.bid.turn, passes: g.bid.passes } : null,
+      needBid: this.phase === 'choosing' && !!g.bid && !g.bid.forced && mySeat >= 0 && mySeat === g.bid.turn,
       lastResult: g.lastResult,
       myRoem: (this.handRoem && this.phase === 'playing' && mySeat >= 0)
         ? Object.assign(E.handRoem(g.hands[mySeat], g.trump), { canCall: this.canCallRoem(mySeat) }) : null,

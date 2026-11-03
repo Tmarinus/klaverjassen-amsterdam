@@ -76,6 +76,7 @@ function createSolo(opts) {
   const room = new GameRoom('SOLO', {
     botLevel: opts.botLevel || 'normal',
     handRoem: !!opts.handRoem,
+    trumpMode: opts.trumpMode,
     send(pid, event, payload) { if (pid === me) net._fire(event, payload); },
     onChange: opts.onSave ? () => opts.onSave(room.snapshot()) : null,
   });
@@ -107,6 +108,7 @@ function createHost(opts) {
   const room = new GameRoom(code, {
     botLevel: opts.botLevel || 'normal',
     handRoem: !!opts.handRoem,
+    trumpMode: opts.trumpMode,
     send(pid, event, payload) {
       if (pid === me) { net._fire(event, payload); return; }
       const c = remotes.get(pid);
@@ -140,8 +142,7 @@ function createHost(opts) {
     if (seat >= 0 && room.phase !== 'lobby') {
       room.setConnected(pid, false);
       room.broadcast();
-      if (room.phase === 'playing' && room.g.turn === seat) room.nextTurn();
-      else if (room.phase === 'choosing' && room.g.chooser === seat) room.scheduleBotTrump(seat);
+      room.wake(seat);                             // a bot takes their pending move
     } else if (seat >= 0) {
       room.removePlayer(pid); room.broadcast();
     } else {
