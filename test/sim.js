@@ -217,18 +217,21 @@ async function drawTrumpMode() {
   const R = require(path.join(__dirname, '..', 'game-room.js'));
   const slow = { botThink: 1e9, trumpThink: 1e9, trickLinger: 1e9, dealAuto: 1e9 };
   const bad = [];
-  const fresh = () => {
-    const r = new R.GameRoom('D', { trumpMode: 'draw', timings: slow });
+  const fresh = (timings = slow) => {
+    const r = new R.GameRoom('D', { trumpMode: 'draw', timings });
     ['a', 'b', 'c', 'd'].forEach(id => r.addHuman(id, id));
     r.startGame(); r.clearTimers(); return r;
   };
   const pid = (r, seat) => r.seats[seat].playerId;
   // everyone passes -> a different suit, first player declares and leads
-  let r = fresh(); const first = r.g.chooser, s1 = r.g.bid.suit;
+  let r = fresh(Object.assign({}, slow, { trumpThink: 0 })); const first = r.g.chooser, s1 = r.g.bid.suit;   // all seats human: trumpThink only times the all-pass pause
   if (r.g.bid.turn !== first) bad.push('bidding did not start with the first player');
   r.handle(pid(r, (first + 1) % 4), 'bid', { take: true });                     // out of turn: ignored
   if (r.phase !== 'choosing') bad.push('out-of-turn bid accepted');
   for (let k = 0; k < 4; k++) r.handle(pid(r, (first + k) % 4), 'bid', { take: false });
+  if (r.phase !== 'choosing' || r.g.bid.turn !== null) bad.push('no pause after the fourth pass');
+  if (r.handle(pid(r, first), 'bid', { take: true }), r.phase !== 'choosing') bad.push('bid accepted during the all-pass pause');
+  await new Promise(res => setTimeout(res, 5));
   r.clearTimers();
   if (r.phase !== 'playing' || r.g.declarer !== first || r.g.trump === s1 || r.g.turn !== first)
     bad.push(`all-pass: phase ${r.phase}, declarer ${r.g.declarer}, trump ${r.g.trump} (passed ${s1}), turn ${r.g.turn}`);

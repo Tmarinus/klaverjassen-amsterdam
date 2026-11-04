@@ -75,6 +75,9 @@
   .seat .name{font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:#0009;border:1px solid #ffffff22;white-space:nowrap}
   .seat.turn .name{background:var(--gold);color:#222;box-shadow:0 0 14px var(--gold)}
   .seat.dealer .name::after{content:" (D)";color:var(--gold)}
+  .seat.turn.dealer .name::after{color:#222}
+  .bidsay{display:inline-block;margin:3px auto 0;padding:2px 9px;border-radius:9px;background:#000a;color:var(--txt);font-size:11.5px;font-weight:700;border:1px solid var(--panelbd)}
+  .playsym{display:inline-block;background:#000a;color:var(--gold);box-shadow:0 0 0 1px var(--gold);border-radius:50%;width:17px;height:17px;line-height:17px;text-align:center;font-size:11px;margin-right:5px;vertical-align:1px}
   .seat.off .name{opacity:.5;font-style:italic}
   #sp-2{top:10px;left:50%;transform:translateX(-50%)}
   #sp-1{left:14px;top:50%;transform:translateY(-50%)}
@@ -447,7 +450,8 @@ function renderSeats(){
   for(const s of st.seats){
     const pos=seatPos(s.seat);
     const el=document.getElementById('sp-'+pos);
-    el.className='seat'+(st.turn===s.seat&&st.phase==='playing'?' turn':'')+(st.dealer===s.seat?' dealer':'')+((s.present&&!s.connected&&!s.isBot)?' off':'');
+    const deciding = st.phase==='choosing' && (st.bid ? st.bid.turn===s.seat : st.chooser===s.seat);   // whose call it is on trump
+    el.className='seat'+((st.turn===s.seat&&st.phase==='playing')||deciding?' turn':'')+(st.dealer===s.seat?' dealer':'')+((s.present&&!s.connected&&!s.isBot)?' off':'');
     const meTag = s.seat===st.mySeat?' (you)':'';
     const teamName = s.team===((st.mySeat<0?0:st.mySeat)%2)?'we':'they';
     let inner='';
@@ -456,9 +460,11 @@ function renderSeats(){
       const vert=(pos===1||pos===3)?' vert':'';
       inner+=`<div class="backrow${vert}">${backs}</div>`;
     }
-    const nm=`<div class="name">${escapeHtml(s.name)}${meTag}${s.isBot?' 🤖':''}</div>`;
+    const plays = st.trump && st.declarer===s.seat && (st.phase==='playing'||st.phase==='scored');   // declarer: must win, or goes nat
+    const nm=`<div class="name">${plays?'<span class="playsym" title="Plays this deal — must score more than the opponents, or goes nat">★</span>':''}${escapeHtml(s.name)}${meTag}${s.isBot?' 🤖':''}</div>`;
     const tag=`<div class="teamtag ${teamName}">${TEAM_LBL[s.team]}${s.isBot&&st.phase!=='lobby'?' · '+cap(s.level):''}${s.present&&!s.connected&&!s.isBot?' · away':''}</div>`;
-    inner = (pos===2)? nm+tag+inner : (pos===0? nm+tag : inner+nm+tag);
+    const said = st.phase==='choosing'&&st.bid&&st.bid.passed&&st.bid.passed.includes(s.seat) ? `<div class="bidsay">Pass on ${SUIT_SYM[st.bid.suit]}</div>` : '';
+    inner = (pos===2)? nm+tag+said+inner : (pos===0? said+nm+tag : inner+nm+tag+said);
     el.innerHTML=inner;
   }
 }
@@ -516,6 +522,7 @@ function renderHand(){
 function statusLine(){
   if(!st) return '';
   if(st.phase==='lobby') return 'Waiting in the lobby…';
+  if(st.phase==='choosing'&&st.bid&&st.bid.turn==null) return `Everyone passed on ${SUIT_SYM[st.bid.suit]} — drawing a new suit…`;
   if(st.phase==='choosing'&&st.bid) return st.needBid?`${SUIT_SYM[st.bid.suit]} drawn — play or pass?`:`${SUIT_SYM[st.bid.suit]} drawn — ${nmeat(st.bid.turn)} to play or pass…`;
   if(st.phase==='choosing') return st.mySeat===st.chooser?'Choose a trump suit…':`Waiting for ${nmeat(st.chooser)} to choose trump…`;
   if(st.phase==='playing'){
@@ -779,7 +786,7 @@ document.getElementById('rulesbtn').onclick=()=>{
     <h3>Roem</h3>run3 20 · run4 50 · <b>stuk</b> (trump K+Q) 20 · run incl. trump K-Q 40/70 · four Jacks 200 · four Queens/Kings/Aces 100. To the team winning the trick.
     <br><b>Roem in hand</b> (host option): runs in your own hand (3 = 20, 4 = 50, 5+ = 100), four of a kind (J 200, Q/K/A 100) and stuk score for your team — but only if you <b>call</b> it before playing your first card.
     <h3>Trump</h3><b>Choose</b> (default): the player left of the dealer names trump. <b>Draw</b> (host option): a random suit is drawn and offered round the table, starting with the player left of the dealer; each may <b>play</b> on it (their team must then win, or go nat) or <b>pass</b>. If all four pass, a different suit is drawn and the first player must play it. The first player always leads the first card.
-    <h3>Winning</h3>The declaring team must score <b>more than</b> the opponents (points + roem), else they go <b>nat</b> and the opponents take all 162 + all roem. All 8 tricks = <b>pit</b> (+100).
+    <h3>Winning</h3>The declaring team must score <b>more than</b> the opponents (points + roem), else they go <b>nat</b> and the opponents take all 162 + all roem. The player who plays has a <span class="playsym">★</span> by their name. All 8 tricks = <b>pit</b> (+100).
     <h3>Match</h3>16 deals; highest total wins.
     </div><br><button class="btn sec" id="closeRules">Close</button></div>`);
   ov.querySelector('#closeRules').onclick=()=>closeModal('rules');

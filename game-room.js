@@ -192,7 +192,11 @@ class GameRoom {
     this.curDeal().bids.push({ seat, suit: b.suit, take: !!take, auto: this.isAuto(seat) });
     if (take) { this.takeTrump(seat); return; }
     this.addLog('', `${this.name(seat)} passes on ${sym(b.suit)}.`);
-    if (++b.passes === 4) { this.drawTrump(true); return; }
+    if (++b.passes === 4) {                         // let the table see the last pass before the redraw
+      b.turn = null; this.broadcast();
+      this.after(this.timings.trumpThink, () => { if (this.phase === 'choosing' && this.g.bid === b) this.drawTrump(true); });
+      return;
+    }
     b.turn = (b.turn + 1) % 4;
     this.broadcast();
     this.scheduleBotTrump(b.turn);
@@ -471,7 +475,8 @@ class GameRoom {
       else if (g.resolving) this.after(this.timings.trickLinger, () => this.resolveTrick());
       else this.nextTurn();
     } else if (this.phase === 'choosing') {
-      this.scheduleBotTrump(this.trumpMode === 'draw' && g.bid ? g.bid.turn : g.chooser);
+      if (this.trumpMode === 'draw' && g.bid && g.bid.passes === 4) this.drawTrump(true);   // saved during the all-pass pause
+      else this.scheduleBotTrump(this.trumpMode === 'draw' && g.bid ? g.bid.turn : g.chooser);
     } else if (this.phase === 'scored') {
       this.after(this.timings.dealAuto, () => this.advance());
     }
@@ -545,7 +550,8 @@ class GameRoom {
       hand: mine, legal,
       needTrump: this.phase === 'choosing' && this.trumpMode === 'choose' && mySeat === g.chooser,
       declarer: g.declarer,
-      bid: g.bid && this.phase === 'choosing' ? { suit: g.bid.suit, turn: g.bid.turn, passes: g.bid.passes } : null,
+      bid: g.bid && this.phase === 'choosing' ? { suit: g.bid.suit, turn: g.bid.turn, passes: g.bid.passes,
+        passed: this.curDeal().bids.filter(x => x.suit === g.bid.suit && !x.take).map(x => x.seat) } : null,   // who passed on the suit on offer
       needBid: this.phase === 'choosing' && !!g.bid && !g.bid.forced && mySeat >= 0 && mySeat === g.bid.turn,
       lastResult: g.lastResult,
       myRoem: (this.handRoem && this.phase === 'playing' && mySeat >= 0)
