@@ -605,15 +605,13 @@ function renderLobbyModal(){
 }
 function renderTrumpModal(){
   if(openOverlays['trump']) return;
-  setCheat(true,false);   // force visible while choosing — don't overwrite the saved preference
   const ov=modal('trump',`<h2>Choose trump</h2>
-    <p>You sit left of the dealer, so you name trump — your team must then score <b>more than</b> the opponents, or go <b>nat</b>. Check the cheat sheet (bottom-left).</p>
+    <p>You sit left of the dealer, so you name trump — your team must then score <b>more than</b> the opponents, or go <b>nat</b>.</p>
     <div class="suitbtns">${SUITS.map(s=>`<button class="suitbtn ${SUIT_RED[s]?'red':'black'}" data-s="${s}">${SUIT_SYM[s]}</button>`).join('')}</div>`);
   ov.querySelectorAll('.suitbtn').forEach(b=>b.onclick=()=>{ net.emit('chooseTrump',{suit:b.dataset.s}); closeModal('trump'); });
 }
 function renderBidModal(){
   if(openOverlays['bid']) return;
-  setCheat(true,false);
   const su=st.bid.suit, first=st.chooser===st.mySeat;
   const ov=modal('bid',`<h2>Trump drawn</h2>
     <div class="suitbtns"><div class="suitbtn ${SUIT_RED[su]?'red':'black'}" style="cursor:default">${SUIT_SYM[su]}</div></div>
