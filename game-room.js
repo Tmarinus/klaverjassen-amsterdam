@@ -359,15 +359,22 @@ class GameRoom {
       ? `${TEAM[play]} went <span class="lose">NAT</span> — ${TEAM[opp]} take everything.`
       : `${TEAM[play]} <span class="win">made it</span>.`;
     this.addLog(nat ? 'nat' : 'deal',
-      `Deal ${g.deal}: ${TEAM[play]} ${playPts} vs ${TEAM[opp]} ${oppPts}. ${madeTxt}` + ((pitPlay || pitOpp) ? ' <b>PIT +100</b>!' : ''));
+      `Deal ${g.deal}: ${TEAM[play]} ${this.ptsText(play, pitPlay)} vs ${TEAM[opp]} ${this.ptsText(opp, pitOpp)}. ${madeTxt}` + ((pitPlay || pitOpp) ? ' <b>PIT +100</b>!' : ''));
     g.lastResult = {
       deal: g.deal, play, opp, playPts, oppPts, nat, pitPlay, pitOpp, awarded, totalRoem,
+      card: g.dealCard.slice(), roem: g.dealRoem.slice(),             // per team, for the breakdown on the result screen
       trump: g.trump, chooser: g.declarer, cumulative: g.cumulative.slice(),
     };
     this.curDeal().result = Object.assign({ dealCard: g.dealCard.slice(), dealRoem: g.dealRoem.slice(), tricksWon: g.tricksWon.slice() }, g.lastResult);
     this.phase = g.deal >= this.matchDeals ? 'matchover' : 'scored';
     this.broadcast();
     if (this.phase === 'scored') this.after(this.timings.dealAuto, () => this.advance());
+  }
+
+  // "64 + 20 roem = 84": card points (incl. last trick), roem, pit, total
+  ptsText(team, pit) {
+    const g = this.g, c = g.dealCard[team], r = g.dealRoem[team];
+    return r || pit ? `${c}${r ? ' + ' + r + ' roem' : ''}${pit ? ' + 100 pit' : ''} = ${c + r + (pit ? 100 : 0)}` : `${c}`;
   }
 
   advance() {

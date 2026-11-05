@@ -77,6 +77,9 @@
   .seat.dealer .name::after{content:" (D)";color:var(--gold)}
   .seat.turn.dealer .name::after{color:#222}
   .bidsay{display:inline-block;margin:3px auto 0;padding:2px 9px;border-radius:9px;background:#000a;color:var(--txt);font-size:11.5px;font-weight:700;border:1px solid var(--panelbd)}
+  .brk{width:100%;border-collapse:collapse;font-size:13.5px}
+  .brk th{font-size:11px;color:var(--dim);font-weight:600;text-align:right;padding:0 4px 2px}
+  .brk td{text-align:right;padding:2px 4px;white-space:nowrap}.brk td:first-child,.brk th:first-child{text-align:left;padding-left:0}
   .playsym{display:inline-block;background:#000a;color:var(--gold);box-shadow:0 0 0 1px var(--gold);border-radius:50%;width:17px;height:17px;line-height:17px;text-align:center;font-size:11px;margin-right:5px;vertical-align:1px}
   .seat.off .name{opacity:.5;font-style:italic}
   #sp-2{top:10px;left:50%;transform:translateX(-50%)}
@@ -653,6 +656,21 @@ function statsHtml(s){
     <div class="row" style="opacity:.7;font-size:12px"><span>${s.games} matches · ${streakTxt} · best ${s.bestStreak}W${blTxt}</span><span></span></div>
   </div>`;
 }
+// Per team: card points + roem (+ pit) = total, then what each team actually scores this deal.
+function breakdownHtml(r,teamWord){
+  if(!r.card) return `<div class="row"><span>${TEAM_LBL[r.play]}</span><span>${r.playPts}</span></div><div class="row"><span>${TEAM_LBL[r.opp]}</span><span>${r.oppPts}</span></div>`;   // result saved by an older version
+  const pit=t=>t===r.play?r.pitPlay:r.pitOpp, anyPit=r.pitPlay||r.pitOpp;
+  const row=t=>`<tr><td class="${teamWord(t)}">${TEAM_LBL[t]}${t===r.play?` <span class="playsym">★</span>${SUIT_SYM[r.trump]}`:''}</td>
+    <td>${r.card[t]}</td><td>+ ${r.roem[t]}</td>${anyPit?`<td>${pit(t)?'+ 100':''}</td>`:''}<td><b>${t===r.play?r.playPts:r.oppPts}</b></td></tr>`;
+  const verdict=r.nat
+    ? `<span class="lose">NAT</span> — ${TEAM_LBL[r.play]} needed more than ${r.oppPts}. ${TEAM_LBL[r.opp]} score 162${r.totalRoem?` + ${r.totalRoem} roem`:''}${r.pitOpp?' + 100 pit':''} = ${r.awarded[r.opp]}.`
+    : `<span class="win">Made it</span> — ${r.playPts} beats ${r.oppPts}. Each team scores its own total.`;
+  return `<table class="brk"><tr><th></th><th>Cards</th><th>Roem</th>${anyPit?'<th>Pit</th>':''}<th>Total</th></tr>${row(r.play)}${row(r.opp)}</table>
+    <div style="font-size:12.5px;margin:6px 0 2px">${verdict}</div>
+    <div class="row"><span>This deal: ${TEAM_LBL[r.play]}</span><span>+${r.awarded[r.play]}</span></div>
+    <div class="row"><span>This deal: ${TEAM_LBL[r.opp]}</span><span>+${r.awarded[r.opp]}</span></div>
+    <div style="font-size:11px;opacity:.6">Cards include +10 for the last trick.</div>`;
+}
 function renderDealModal(){
   if(openOverlays['deal']) return;
   const r=st.lastResult; if(!r) return;
@@ -671,10 +689,7 @@ function renderDealModal(){
   const ov=modal('deal',`
     <h2>Deal ${r.deal} ${r.nat?'— NAT':'complete'}</h2>
     <div class="summary">
-      ${line(`${TEAM_LBL[r.play]} (declared ${SUIT_SYM[r.trump]})`,teamWord(r.play),r.playPts+' pts')}
-      ${line(`${TEAM_LBL[r.opp]}`,teamWord(r.opp),r.oppPts+' pts')}
-      <div class="row" style="opacity:.7;font-size:12px"><span>roem this deal</span><span>${r.totalRoem}</span></div>
-      ${(r.pitPlay||r.pitOpp)?`<div class="row"><span class="win">PIT +100</span><span>${TEAM_LBL[r.pitPlay?r.play:r.opp]}</span></div>`:''}
+      ${breakdownHtml(r,teamWord)}
       <hr style="border-color:#ffffff22">
       <div class="row big"><span class="${teamWord(myTeam)}">We total</span><span>${r.cumulative[myTeam]}</span></div>
       <div class="row big"><span class="${teamWord(1-myTeam)}">They total</span><span>${r.cumulative[1-myTeam]}</span></div>

@@ -32,9 +32,10 @@ function freshDeck() {
 }
 
 /* ascending within suit; trump ranks by trump strength once known */
+const HAND_ORDER = ['clubs', 'diamonds', 'spades', 'hearts'];   // hand display: black, red, black, red
 function handComparator(trump) {
   return (a, b) => {
-    if (a.suit !== b.suit) return SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
+    if (a.suit !== b.suit) return HAND_ORDER.indexOf(a.suit) - HAND_ORDER.indexOf(b.suit);
     if (!trump) return SEQ.indexOf(a.rank) - SEQ.indexOf(b.rank);
     const sa = a.suit === trump ? TRUMP_STR[a.rank] : PLAIN_STR[a.rank];
     const sb = b.suit === trump ? TRUMP_STR[b.rank] : PLAIN_STR[b.rank];
