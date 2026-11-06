@@ -193,14 +193,16 @@ function trumpScore(hand, s, level = 'normal') {
   }
   return sc;
 }
-// "Draw" trump mode: play on the drawn suit (true) or pass. Thresholds are
-// set where declaring a suit of that score breaks even in bot self-play
-// (normal ~70: 74% made; hard ~80: 72% made).
-const TAKE_AT = { easy: null, normal: 68, hard: 80, family: 80 };   // ~break-even: avg net result of declaring >= 0
-function botTakeTrump(hand, suit, level = 'normal') {
+// "Draw" trump mode: play on the drawn suit (true) or pass. `pos` is the bidder's place
+// in the round (0 = first player, who must play a redrawn suit if all four pass). Passing
+// in 2nd or 4th place pushes that forced deal towards the opponents, so those seats need a
+// much stronger hand; 3rd place passes towards its own partner and takes a bit lighter.
+// Thresholds are where taking beats passing in bot self-play (30k deals per position).
+const TAKE_AT = { easy: null, normal: [62, 100, 58, 100], hard: [72, 110, 65, 105], family: [72, 110, 65, 105] };
+function botTakeTrump(hand, suit, level = 'normal', pos = 0) {
   const n = hand.filter(c => c.suit === suit).length;
   if (level === 'easy') return n >= 4 || (n >= 3 && hand.some(c => c.suit === suit && c.rank === 'J'));
-  return trumpScore(hand, suit, level) >= TAKE_AT[level];
+  return trumpScore(hand, suit, level) >= TAKE_AT[level][pos];
 }
 
 // unseen = cards not in my hand and not yet played (i.e. in the other three hands)

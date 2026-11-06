@@ -232,7 +232,7 @@ class GameRoom {
       if (this.phase !== 'choosing' || !this.isAuto(seat)) return;
       const g = this.g;
       if (this.trumpMode === 'draw') {
-        if (g.bid && !g.bid.forced && g.bid.turn === seat) this.bid(seat, E.botTakeTrump(g.hands[seat], g.bid.suit, this.levelOf(seat)));
+        if (g.bid && !g.bid.forced && g.bid.turn === seat) this.bid(seat, E.botTakeTrump(g.hands[seat], g.bid.suit, this.levelOf(seat), (seat - g.chooser + 4) % 4));
       } else if (g.chooser === seat) this.setTrump(E.botChooseTrump(g.hands[seat], this.levelOf(seat)));
     });
   }
