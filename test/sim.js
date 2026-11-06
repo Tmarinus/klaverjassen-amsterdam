@@ -210,7 +210,7 @@ function check(name, ok, detail) {
     if (JSON.stringify(ex).includes(snap.tokens[0][1])) bad.push('export leaks seat token');
   } catch (e) { bad.push(e.message); }
   check('resume from snapshot + debug export', bad.length === 0, bad.length ? bad.join('; ') : '4-deal match resumed mid-trick, 162/deal, 0 illegal');
-})().then(drawTrumpMode).then(seatLevels).then(strength);
+})().then(drawTrumpMode).then(seatLevels).then(autoNext).then(strength);
 
 /* ---- draw-trump mode: play/pass round, forced redraw, first player still leads ---- */
 async function drawTrumpMode() {
@@ -281,6 +281,36 @@ async function seatLevels() {
   } catch (e) { bad.push(e.message); }
   E.chooseBotCard = orig;
   check('per-seat bot levels', bad.length === 0, bad.length ? bad.join('; ') : 'away host normal, W easy, N hard, E normal→family mid-match, survives resume');
+}
+
+async function autoNext() {
+  const R = require(path.join(__dirname, '..', 'game-room.js'));
+  const fast = { botThink: 0, trumpThink: 0, trickLinger: 0, dealAuto: 0 };
+  const bad = [];
+  const until = (cond, ms = 20000) => new Promise((res, rej) => { const t0 = Date.now(); (function poll() { if (cond()) return res(); if (Date.now() - t0 > ms) return rej(new Error('timeout')); setTimeout(poll, 1); })(); });
+  const wait = ms => new Promise(res => setTimeout(res, ms));
+  try {
+    const m = new R.GameRoom('A', { autoNext: false, matchDeals: 3, timings: fast });
+    m.addHuman('h', 'Host'); m.seats[0].connected = false;           // a bot covers the host's cards
+    m.startGame();
+    await until(() => m.phase === 'scored');
+    await wait(30);
+    if (m.phase !== 'scored' || m.g.deal !== 1) bad.push('advanced by itself while off');
+    if (m.viewFor(0).autoNext !== false) bad.push('view lacks autoNext');
+    m.handle('h', 'next', {});                                        // the Next deal button still works
+    if (m.g.deal !== 2) bad.push('Next deal did not advance');
+    await until(() => m.phase === 'scored');
+    m.handle('x', 'setAutoNext', { on: true });                       // not the host: ignored
+    await wait(30);
+    if (m.g.deal !== 2 || m.autoNext) bad.push('non-host changed autoNext');
+    const snap = JSON.parse(JSON.stringify(m.snapshot()));
+    m.handle('h', 'setAutoNext', { on: true });                       // switched on while the result shows: continues
+    await until(() => m.g.deal === 3);
+    const r = new R.GameRoom('A', {}); r.restore(snap);
+    if (r.autoNext !== false) bad.push('autoNext lost on resume');
+    m.clearTimers(); r.clearTimers();
+  } catch (e) { bad.push(e.message); }
+  check('auto next deal option', bad.length === 0, bad.length ? bad.join('; ') : 'off waits for Next deal, host-only, switching on mid-result continues, survives resume');
 }
 
 function strength() {

@@ -49,6 +49,7 @@ class GameRoom {
     this.seatLevels = [0, 1, 2, 3].map(i => (opts.seatLevels && LEVELS.includes(opts.seatLevels[i])) ? opts.seatLevels[i] : null);   // per-seat override
     this.handRoem = !!opts.handRoem;               // host option: roem in hand may be called
     this.trumpMode = opts.trumpMode === 'draw' ? 'draw' : 'choose';   // host option: how trump is set
+    this.autoNext = opts.autoNext !== false;       // host option: start the next deal by itself after the result
     this.spectators = new Map();                   // playerId -> { name }
     this.tokens = new Map();                        // playerId -> seat reconnection token
     this.g = null;                                 // game state
@@ -127,7 +128,7 @@ class GameRoom {
     // Random starting dealer each match, so the host (seat 0) isn't always first to choose trump.
     this.g = { deal: 0, cumulative: [0, 0], firstDealer: Math.floor(Math.random() * 4) };
     this.match = (this.match || 0) + 1;
-    this.note('matchStart', { match: this.match, botLevel: this.botLevel, seatLevels: this.seats.map((s, i) => this.levelOf(i)), handRoem: this.handRoem, trumpMode: this.trumpMode, seats: this.seats.map(s => ({ name: s.name, isBot: s.isBot })) });
+    this.note('matchStart', { match: this.match, botLevel: this.botLevel, seatLevels: this.seats.map((s, i) => this.levelOf(i)), handRoem: this.handRoem, trumpMode: this.trumpMode, autoNext: this.autoNext, seats: this.seats.map(s => ({ name: s.name, isBot: s.isBot })) });
     this.log = [];
     this.addLog('deal', `Match start — ${this.matchDeals} deals, Amsterdam rules. North &amp; South vs East &amp; West. Bots: ${this.botsLabel()}.` +
       (this.handRoem ? ' Roem in hand: <b>on</b> (call it before your first card).' : '') +
@@ -368,7 +369,11 @@ class GameRoom {
     this.curDeal().result = Object.assign({ dealCard: g.dealCard.slice(), dealRoem: g.dealRoem.slice(), tricksWon: g.tricksWon.slice() }, g.lastResult);
     this.phase = g.deal >= this.matchDeals ? 'matchover' : 'scored';
     this.broadcast();
-    if (this.phase === 'scored') this.after(this.timings.dealAuto, () => this.advance());
+    if (this.phase === 'scored') this.scheduleAutoNext();
+  }
+
+  scheduleAutoNext() {
+    if (this.autoNext) this.after(this.timings.dealAuto, () => { if (this.autoNext) this.advance(); });
   }
 
   // "64 + 20 roem = 84": card points (incl. last trick), roem, pit, total
@@ -423,6 +428,13 @@ class GameRoom {
       case 'bid':
         this.bid(this.seatOf(playerId), !!data.take);
         break;
+      case 'setAutoNext':                          // any phase; turning it on while a result shows starts the countdown
+        if (this.hostId === playerId && this.autoNext !== !!data.on) {
+          this.autoNext = !!data.on;
+          if (this.autoNext && this.phase === 'scored') this.scheduleAutoNext();
+          this.broadcast();
+        }
+        break;
       case 'setTrumpMode':
         if (this.hostId === playerId && this.phase === 'lobby' && ['choose', 'draw'].includes(data.mode)) { this.trumpMode = data.mode; this.broadcast(); }
         break;
@@ -456,7 +468,7 @@ class GameRoom {
   snapshot() {
     return {
       v: 1, savedAt: Date.now(), code: this.code, phase: this.phase, hostId: this.hostId,
-      seats: this.seats, tokens: [...this.tokens], botLevel: this.botLevel, seatLevels: this.seatLevels, handRoem: this.handRoem, trumpMode: this.trumpMode,
+      seats: this.seats, tokens: [...this.tokens], botLevel: this.botLevel, seatLevels: this.seatLevels, handRoem: this.handRoem, trumpMode: this.trumpMode, autoNext: this.autoNext,
       matchDeals: this.matchDeals, match: this.match, advanced: this.advanced,
       log: this.log, g: this.g, history: this.history, events: this.events,
     };
@@ -464,7 +476,7 @@ class GameRoom {
   restore(snap) {
     Object.assign(this, {
       code: snap.code, phase: snap.phase, hostId: snap.hostId, seats: snap.seats,
-      tokens: new Map(snap.tokens), botLevel: snap.botLevel, seatLevels: snap.seatLevels || [null, null, null, null], handRoem: !!snap.handRoem, trumpMode: snap.trumpMode || 'choose',
+      tokens: new Map(snap.tokens), botLevel: snap.botLevel, seatLevels: snap.seatLevels || [null, null, null, null], handRoem: !!snap.handRoem, trumpMode: snap.trumpMode || 'choose', autoNext: snap.autoNext !== false,
       matchDeals: snap.matchDeals, match: snap.match, advanced: snap.advanced,
       log: snap.log || [], g: snap.g, history: snap.history || [], events: snap.events || [],
     });
@@ -485,7 +497,7 @@ class GameRoom {
       if (this.trumpMode === 'draw' && g.bid && g.bid.passes === 4) this.drawTrump(true);   // saved during the all-pass pause
       else this.scheduleBotTrump(this.trumpMode === 'draw' && g.bid ? g.bid.turn : g.chooser);
     } else if (this.phase === 'scored') {
-      this.after(this.timings.dealAuto, () => this.advance());
+      this.scheduleAutoNext();
     }
     this.broadcast();
   }
@@ -514,7 +526,7 @@ class GameRoom {
     return Object.assign({
       format: 'klaverjassen-debug/1', exportedAt: new Date().toISOString(),
       note: 'Seats: 0 South, 1 West, 2 North, 3 East. "*" in readable = played by a human; legal = cards allowed at that moment.',
-      code: this.code, phase: this.phase, botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode,
+      code: this.code, phase: this.phase, botLevel: this.botLevel, handRoem: this.handRoem, trumpMode: this.trumpMode, autoNext: this.autoNext,
       seats: this.seats.map((s, i) => s && { seat: i, label: SEAT_LABEL[i], name: s.name, isBot: s.isBot, connected: s.connected, level: this.levelOf(i) }),
       events: this.events, history: this.history, readable,
     }, meta || {});
@@ -541,6 +553,7 @@ class GameRoom {
       botLevel: this.botLevel,
       handRoem: this.handRoem,
       trumpMode: this.trumpMode,
+      autoNext: this.autoNext,
     };
     if (mySeat >= 0 && this.seats[mySeat]) base.token = this.tokens.get(this.seats[mySeat].playerId);
     if (!g) return base;

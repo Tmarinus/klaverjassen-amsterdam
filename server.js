@@ -136,6 +136,7 @@ io.on('connection', (socket) => {
   socket.on('setHandRoem', forward('setHandRoem'));
   socket.on('callRoem', forward('callRoem'));
   socket.on('setTrumpMode', forward('setTrumpMode'));
+  socket.on('setAutoNext', forward('setAutoNext'));
   socket.on('bid', forward('bid'));
   socket.on('start', forward('start'));
   socket.on('chooseTrump', forward('chooseTrump'));

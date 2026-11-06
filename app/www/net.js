@@ -78,6 +78,7 @@ function createSolo(opts) {
     seatLevels: opts.seatLevels,
     handRoem: !!opts.handRoem,
     trumpMode: opts.trumpMode,
+    autoNext: opts.autoNext,
     send(pid, event, payload) { if (pid === me) net._fire(event, payload); },
     onChange: opts.onSave ? () => opts.onSave(room.snapshot()) : null,
   });
@@ -111,6 +112,7 @@ function createHost(opts) {
     seatLevels: opts.seatLevels,
     handRoem: !!opts.handRoem,
     trumpMode: opts.trumpMode,
+    autoNext: opts.autoNext,
     send(pid, event, payload) {
       if (pid === me) { net._fire(event, payload); return; }
       const c = remotes.get(pid);
