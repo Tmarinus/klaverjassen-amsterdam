@@ -25,8 +25,8 @@ defaults), the seat cards in the lobby, or **⚙ View → 🤖 Bot levels** duri
 takes effect from that bot's next move). A player who drops out is covered at the *All bots* level.
 
 Multiplayer is **peer-to-peer** (WebRTC via the free PeerJS matchmaker) — **no server to run**.
-Everyone just needs internet; the host keeps their tab/app open. PC browsers, phone browsers,
-and the Android app all interoperate.
+Everyone just needs internet; the host keeps their tab open. PC and phone browsers
+interoperate.
 
 **Bad internet?** Players reconnect by themselves when the link drops (a bot plays their cards
 meanwhile, and the banner at the top shows the status). After a reload, use **↻ Rejoin table** on
@@ -34,15 +34,9 @@ the start screen. The host's game is autosaved in the browser, so if the host's 
 crashes, **↻ Resume your table** reopens it with the same code and everyone reconnects.
 
 **Something looks wrong?** The host (or solo player) can use **⚙ View → 🐞 Export game log**: it
-saves a JSON file (copied to the clipboard in the Android app) with every deal's hands, each card
+saves a JSON file with every deal's hands, each card
 played with the cards that were legal at that moment, roem calls, scores and connection events,
 plus a readable digest. Anything outside the legal set is flagged `[ILLEGAL]`.
-
-**Android app:** download
-[klaverjassen.apk](https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest/download/klaverjassen.apk)
-from the latest [Release](https://github.com/Tmarinus/klaverjassen-amsterdam/releases/latest) and
-install it. Same game, native; it checks this repo's Releases for updates and can install them
-itself. (iOS: the Capacitor project supports it, but building needs a Mac.)
 
 ## Repo layout
 - `engine.js` — pure Amsterdam rules engine (deal, legal moves, roem, scoring, bot AI). Verified by simulation.
@@ -86,12 +80,9 @@ the dealer leads the first card.
 reference is in the in-game **Rules** panel.
 
 ## Setting up a copy of this repo
-Pushing to `main` runs the tests, deploys the web app and builds the APK. For a fresh copy:
-- **Web app:** Settings → Pages → Source: **GitHub Actions** (workflow `pages.yml`).
-- **Android signing:** follow the steps at the top of `.github/workflows/keystore.yml` once to
-  create the signing secrets. Without them the APK falls back to debug signing, which breaks
-  self-updates.
-- **Self-update target:** `REPO` in `app/www/update.js` must point at your repo.
+Pushing to `main` runs the tests and deploys the web app. For a fresh copy, set
+Settings → Pages → Source: **GitHub Actions** (workflow `pages.yml`). The Android app is no
+longer built automatically; see [`app/README.md`](app/README.md) to build it locally.
 
 ---
 

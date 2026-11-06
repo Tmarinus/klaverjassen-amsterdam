@@ -2,8 +2,7 @@ name: Deploy web app to GitHub Pages
 # Pages enabled via Settings -> Source: GitHub Actions.
 
 # Publishes the peer-to-peer web app (app/www) as a static site, so anyone can
-# host/join from a PC or phone browser — no install, no server. Interoperates
-# with the Android APK (same code, same PeerJS namespace).
+# host/join from a PC or phone browser — no install, no server.
 #
 # NOTE: GitHub Pages on a PRIVATE repo needs a paid plan. On the free plan the
 # repo must be public. Also set Settings -> Pages -> Source = "GitHub Actions"

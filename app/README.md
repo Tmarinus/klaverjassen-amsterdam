@@ -44,22 +44,9 @@ npx serve www          # then open the printed http://localhost:… URL
 Solo works fully offline. Host/Join need internet (PeerJS). Open two browser
 tabs/windows to try host + join against yourself.
 
-## Get an installable Android APK (no local Android SDK needed)
+## Android APK (optional — build locally, requires Android Studio + JDK 17)
 
-The APK is built in the cloud by GitHub Actions:
-
-1. Push this repository (root = the `klaverjassen` folder) to GitHub.
-2. The **Build Android APK** workflow runs on push (or trigger it manually from the
-   Actions tab → *Run workflow*).
-3. Open the finished run → **Artifacts** → download `klaverjassen-debug-apk`.
-4. Copy the `.apk` to an Android phone and open it. Enable *Install unknown apps*
-   for your browser/file manager when prompted.
-
-The debug APK is signed with the standard debug key and installs on any device — no
-Play Store account required. To publish on the Play Store later, add a release keystore
-and a signed `assembleRelease` step.
-
-## Build locally (optional — requires Android Studio + JDK 17)
+There is no automatic APK build; the website is the supported way to play.
 
 ```bash
 cd app
